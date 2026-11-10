@@ -1,55 +1,54 @@
 # HANEXO
 
-HANEXO is built in this repository. Its production build is published to the
-[website repository](https://github.com/fuguangji/fuguangji.github.io) at
+HANEXO is developed in this repository. Its production build is published to
+the [website repository](https://github.com/fuguangji/fuguangji.github.io) at
 `game/Hanexo/`.
 
-## Deployment workflow
+## Deployment
 
-The deployment workflow is maintained in the website repository:
+The GitHub Actions workflow is stored **in this repository**:
 
-`.github/workflows/deploy-hanexo.yml`
+`.github/workflows/deploy.yml`
 
-It checks this repository's `main` branch every five minutes and can also be
-started manually from the website repository's **Actions** tab.
+It runs automatically whenever commits are pushed to the `main` branch, and
+can also be started manually from this repository's **Actions** tab.
 
-When a new source commit is detected, the workflow:
+The workflow:
 
-1. Checks out HANEXO.
-2. Installs dependencies with `npm ci` (or `npm install` if no lockfile exists).
+1. Checks out HANEXO source.
+2. Installs dependencies with `npm ci` when a lockfile exists (otherwise
+   `npm install`).
 3. Runs `npm run build`.
-4. Publishes the contents of `dist/` to `game/Hanexo/` in the website repository.
-5. Commits and pushes the deployment using the website repository's
-   `GITHUB_TOKEN`.
+4. Verifies that `dist/index.html` exists.
+5. Checks out the website repository.
+6. Publishes the contents of `dist/` to
+   `fuguangji.github.io/game/Hanexo/`.
+7. Commits and pushes the generated files to the website repository.
 
-The workflow skips deployment until a `package.json` exists and a valid
-`HANEXO_TOKEN` secret has been configured. Missing configuration does not
-cause the scheduled run to fail.
+If `package.json` does not exist yet, the workflow safely skips the build.
 
 ## One-time configuration
 
-A maintainer must configure the following secret in the **website repository**:
+The workflow needs a token that can write to the separate website repository.
 
-1. Open [fuguangji.github.io → Settings → Secrets and variables → Actions](https://github.com/fuguangji/fuguangji.github.io/settings/secrets/actions).
-2. Select **New repository secret**.
-3. Set the name to `HANEXO_TOKEN`.
-4. Set the value to a fine-grained personal access token that can access
-   `fuguangji/Hanexo` with **Contents: Read-only** permission.
-5. Save the secret.
+1. Create a fine-grained personal access token for
+   [fuguangji.github.io](https://github.com/fuguangji/fuguangji.github.io).
+2. Grant it **Contents: Read and write** permission for that repository.
+3. In this HANEXO repository, open
+   [Settings → Secrets and variables → Actions](https://github.com/fuguangji/Hanexo/settings/secrets/actions).
+4. Create a repository secret named `WEBSITE_DEPLOY_TOKEN`.
+5. Paste the token as its value.
 
-The token is only used to read this private source repository. The website
-workflow uses its own `GITHUB_TOKEN` to write the generated files to the
-website repository; its workflow permissions include `contents: write`.
-
-Do not commit the token, paste it into source files, or put it in this README.
+The token is used only by GitHub Actions to publish the build to the website
+repository. Never put it in source code or commit it to Git.
 
 ## Build requirements
 
 When the application is ready for deployment, this repository must contain:
 
 - `package.json` with a `build` script (for example, `vite build`).
-- A lockfile (`package-lock.json`) recommended for reproducible installs.
-- A build that outputs the production site to `dist/`.
+- Preferably `package-lock.json` for reproducible dependency installation.
+- A production build that outputs the website to `dist/`.
 
 For Vite, configure the public base path as:
 
@@ -59,14 +58,15 @@ export default {
 }
 ```
 
-The workflow does not create the application scaffold or modify its source
+The workflow does not create or modify the application scaffold or its source
 configuration. It only installs, builds, and publishes the existing project.
 
 ## Deployment destination
 
 - Source: `fuguangji/Hanexo`, branch `main`
+- Workflow: `fuguangji/Hanexo/.github/workflows/deploy.yml`
 - Destination: `fuguangji/fuguangji.github.io/game/Hanexo/`
 - Published URL: https://fuguangji.github.io/game/Hanexo/
 
-The workflow replaces the contents of the HANEXO deployment directory on each
-successful deployment. It does not replace the rest of the website.
+Only the HANEXO deployment directory is updated; the rest of the website is
+left untouched.
