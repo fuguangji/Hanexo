@@ -1,0 +1,100 @@
+name: Deploy HANEXO
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hanexo-deployment
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build and publish to GitHub Pages repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout HANEXO source
+        uses: actions/checkout@v4
+
+      - name: Check whether the application is ready
+        id: app
+        shell: bash
+        run: |
+          if [ ! -f package.json ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::package.json does not exist yet. Deployment skipped."
+            exit 0
+          fi
+
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.app.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.app.outputs.ready == 'true'
+        shell: bash
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build production site
+        if: steps.app.outputs.ready == 'true'
+        run: npm run build
+
+      - name: Verify build output
+        if: steps.app.outputs.ready == 'true'
+        shell: bash
+        run: |
+          if [ ! -s dist/index.html ]; then
+            echo "::error::Build output is missing dist/index.html."
+            exit 1
+          fi
+
+      - name: Checkout website repository
+        if: steps.app.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: fuguangji/fuguangji.github.io
+          ref: main
+          token: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
+          path: website
+          fetch-depth: 0
+
+      - name: Publish HANEXO build
+        if: steps.app.outputs.ready == 'true'
+        shell: bash
+        run: |
+          mkdir -p website/game/Hanexo
+          rsync -a --delete dist/ website/game/Hanexo/
+          touch website/game/Hanexo/.nojekyll
+
+      - name: Commit and push website deployment
+        if: steps.app.outputs.ready == 'true'
+        shell: bash
+        run: |
+          git -C website config user.name "github-actions[bot]"
+          git -C website config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git -C website add -- game/Hanexo
+
+          if git -C website diff --cached --quiet; then
+            echo "Published files are already up to date."
+          else
+            git -C website commit -m "Deploy HANEXO from ${{ github.sha }}"
+            git -C website push origin HEAD:main
+          fi
