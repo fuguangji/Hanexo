@@ -93,7 +93,7 @@ function updateControls() {
   cancelBuildButton.hidden = !buildMode;
   buildHint.textContent = buildMode
     ? `建造模式：${getBuildingDefinitions()[buildMode].label}。點擊地圖空地放置，按 Esc 取消。`
-    : "選擇建築後，在地圖上點擊放置。採集建築必須靠近對應資源。";
+    : "採集建築可直接建在空白地塊；金屬礦場須靠近金屬礦點。";
   canvas.classList.toggle("building-cursor", Boolean(buildMode));
 }
 
@@ -182,7 +182,8 @@ function renderInspector() {
     inspector.append($("p", "muted-copy", "目前沒有庫存。"));
   }
   if (["lumberCamp", "quarry", "oilWell", "metalMine"].includes(building.type)) {
-    inspector.append($("p", "muted-copy", building.blockedReason || "資源採集中。"));
+    const extractionLabel = building.type === "metalMine" ? "礦點採集" : "地表開採";
+    inspector.append($("p", "muted-copy", `${extractionLabel}：${building.blockedReason || "正常運作中。"}`));
   }
   if (building.type === "factory") renderFactoryControls(building);
   renderTransferControls(building);
