@@ -5,7 +5,6 @@ import {
   getBuildingDefinitions, getRecipeDefinitions, getResourceDefinitions
 } from "./simulation/world.js";
 import { createRenderer } from "./render/renderer.js";
-import "/game/account/auth-bootstrap.js";
 
 const homeScreen = document.querySelector("#home-screen");
 const gameScreen = document.querySelector("#game-screen");
@@ -68,6 +67,13 @@ function renderAccountState(user, ready = true, error = null) {
 }
 
 async function initializeAccountIntegration() {
+  try {
+    const authModuleUrl = new URL("/game/account/auth-bootstrap.js", window.location.origin).href;
+    await import(/* @vite-ignore */ authModuleUrl);
+  } catch (error) {
+    renderAccountState(null, true, error.message);
+    return;
+  }
   const auth = window.SITE_AUTH;
   if (!auth) {
     renderAccountState(null, true, "找不到共用帳號狀態入口。");
