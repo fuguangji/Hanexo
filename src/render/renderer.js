@@ -2,9 +2,9 @@ import { BUILDING_DEFINITIONS, RESOURCE_NODE_DEFINITIONS } from "../simulation/e
 
 const TILE_SIZE = 28;
 const COLORS = {
-  background: "#081720", grid: "rgba(160, 208, 226, 0.12)",
-  plain: "#122b35", rough: "#1b3540", water: "#102b43",
-  player: "#83d9f3", enemy: "#e77d79", neutral: "#d4b978", text: "#dceef5"
+  background: "#10171b", grid: "rgba(185, 194, 193, 0.13)",
+  plain: "#293238", rough: "#353b3d", water: "#1b3440",
+  player: "#e5b45f", enemy: "#c86f5b", neutral: "#a8a49a", text: "#e8e5dc"
 };
 
 export function createRenderer(canvas) {
@@ -36,6 +36,14 @@ export function createRenderer(canvas) {
         const sy = camera.y + y * tile;
         ctx.fillStyle = cell.terrain === "water" ? COLORS.water : cell.terrain === "rough" ? COLORS.rough : COLORS.plain;
         ctx.fillRect(sx, sy, tile, tile);
+        if (cell.terrain === "plain") {
+          ctx.fillStyle = "rgba(205, 192, 164, 0.035)";
+          ctx.fillRect(sx + tile * 0.12, sy + tile * 0.12, tile * 0.76, tile * 0.76);
+        } else if (cell.terrain === "rough") {
+          ctx.strokeStyle = "rgba(8, 12, 14, 0.22)";
+          ctx.lineWidth = Math.max(1, tile * 0.035);
+          ctx.beginPath(); ctx.moveTo(sx + tile * 0.18, sy + tile * 0.72); ctx.lineTo(sx + tile * 0.76, sy + tile * 0.24); ctx.stroke();
+        }
         if (cell.owner === "player") {
           ctx.fillStyle = "rgba(88, 190, 222, 0.16)";
           ctx.fillRect(sx, sy, tile, tile);
@@ -69,22 +77,27 @@ export function createRenderer(canvas) {
     const definition = RESOURCE_NODE_DEFINITIONS[node.type];
     const cx = camera.x + (node.x + 0.5) * tile;
     const cy = camera.y + (node.y + 0.5) * tile;
-    const radius = Math.max(4, tile * 0.27);
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    const radius = Math.max(5, tile * 0.34);
+    ctx.globalAlpha = Math.max(0.35, node.amount / node.maxAmount);
+    ctx.fillStyle = "#171d20";
+    ctx.fillRect(cx - radius * 1.2, cy - radius * 0.8, radius * 2.4, radius * 1.6);
+    ctx.strokeStyle = definition.color;
+    ctx.lineWidth = Math.max(2, tile * 0.08);
+    ctx.strokeRect(cx - radius * 1.2, cy - radius * 0.8, radius * 2.4, radius * 1.6);
     ctx.fillStyle = definition.color;
-    ctx.globalAlpha = Math.max(0.25, node.amount / node.maxAmount);
-    ctx.fill();
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - radius * 0.72 + i * radius * 0.62, cy + radius * 0.35);
+      ctx.lineTo(cx - radius * 0.45 + i * radius * 0.62, cy - radius * 0.35);
+      ctx.lineTo(cx - radius * 0.12 + i * radius * 0.62, cy + radius * 0.35);
+      ctx.closePath(); ctx.fill();
+    }
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = "rgba(4,13,20,.8)";
-    ctx.lineWidth = 2;
-    ctx.stroke();
     if (camera.zoom >= 0.85) {
-      ctx.fillStyle = "#07131d";
-      ctx.font = `bold ${Math.max(8, tile * 0.35)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(node.resource === "wood" ? "W" : node.resource[0].toUpperCase(), cx, cy);
+      ctx.fillStyle = "#171d20";
+      ctx.font = `900 ${Math.max(8, tile * 0.32)}px sans-serif`;
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(node.resource === "commonMetal" ? "M" : "R", cx, cy);
     }
   }
 
@@ -95,7 +108,7 @@ export function createRenderer(canvas) {
     const color = structure.owner === "player" ? (definition?.color || COLORS.player) : structure.owner === "enemy" ? COLORS.enemy : COLORS.neutral;
     const size = tile * (structure.type === "hq" ? 0.76 : 0.66);
     ctx.fillStyle = color;
-    ctx.strokeStyle = selected ? "#ffffff" : "#07131d";
+    ctx.strokeStyle = selected ? "#fff1c8" : "#101619";
     ctx.lineWidth = selected ? 3 : 1.5;
     if (structure.type === "outpost") {
       ctx.beginPath();
@@ -109,11 +122,11 @@ export function createRenderer(canvas) {
     } else {
       ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
       ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
-      ctx.fillStyle = "#07131d";
+      ctx.fillStyle = "#171d20";
       ctx.font = `bold ${Math.max(8, tile * 0.36)}px sans-serif`;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      const symbol = structure.type === "hq" ? "H" : structure.type === "factory" ? "F" : structure.type === "warehouse" ? "W" : "M";
+      const symbol = structure.type === "hq" ? "HQ" : structure.type === "factory" ? "F" : structure.type === "warehouse" ? "W" : structure.type === "metalMine" ? "M" : structure.type === "oilWell" ? "O" : structure.type === "lumberCamp" ? "L" : "Q";
       ctx.fillText(symbol, cx, cy);
     }
     if (selected) {
