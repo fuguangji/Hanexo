@@ -27,7 +27,7 @@ export function createWorld() {
       makeUnit("u-3", "機動小隊", 8, 16)
     ],
     structures: [
-      makeBuilding("hq-player", "hq", "player", 4, 16, { wood: 300, stone: 250, iron: 40, copper: 30, oil: 20 }),
+      makeBuilding("hq-player", "hq", "player", 4, 16, { wood: 300, stone: 250, commonMetal: 70, oil: 20 }),
       makeBuilding("hq-enemy", "hq", "enemy", 43, 16, {}, "敵方總指揮部"),
       makeBuilding("outpost-1", "outpost", "neutral", 24, 7, {}, "北部據點"),
       makeBuilding("outpost-2", "outpost", "neutral", 24, 25, {}, "南部據點")
