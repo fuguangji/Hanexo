@@ -153,10 +153,14 @@ function frame(timestamp, session) {
 }
 
 function renderInspector() {
-  if (!world || !inspectorPanel.open) return;
-  inspector.replaceChildren();
-  transferSection.hidden = true;
+  if (!world) return;
   const selected = getSelectedEntities(world);
+  if (logisticsPanel.open) {
+    transferSection.hidden = true;
+    if (selected.building) renderTransferControls(selected.building);
+  }
+  if (!inspectorPanel.open) return;
+  inspector.replaceChildren();
   if (selected.units.length) {
     inspector.append($("p", "inspector-title", selected.units.length === 1 ? selected.units[0].name : `已選取 ${selected.units.length} 支單位`));
     const hp = selected.units.reduce((sum, unit) => sum + unit.hp, 0);
@@ -188,7 +192,7 @@ function renderInspector() {
     inspector.append($("p", "muted-copy", `${extractionLabel}：${building.blockedReason || "正常運作中。"}`));
   }
   if (building.type === "factory") renderFactoryControls(building);
-  if (logisticsPanel.open) renderTransferControls(building);
+
 }
 
 function renderFactoryControls(building) {
