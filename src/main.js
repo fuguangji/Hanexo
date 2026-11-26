@@ -5,6 +5,7 @@ import {
   getBuildingDefinitions, getRecipeDefinitions, getResourceDefinitions
 } from "./simulation/world.js";
 import { createRenderer } from "./render/renderer.js";
+import "/game/account/auth-bootstrap.js";
 
 const homeScreen = document.querySelector("#home-screen");
 const gameScreen = document.querySelector("#game-screen");
@@ -21,6 +22,7 @@ const logisticsPanel = document.querySelector("#logistics-panel");
 const transferForm = document.querySelector("#transfer-form");
 const buildHint = document.querySelector("#build-hint");
 const cancelBuildButton = document.querySelector("#cancel-build");
+const accountButton = document.querySelector("#account-button");
 
 let world = null;
 let renderer = null;
@@ -41,6 +43,47 @@ const $ = (tag, className, text) => {
   if (text !== undefined) element.textContent = text;
   return element;
 };
+
+
+function getAccountCenterUrl() {
+  const url = new URL("https://fuguangji.github.io/game/account/");
+  url.searchParams.set("returnTo", window.location.href);
+  return url.href;
+}
+
+function renderAccountState(user, ready = true, error = null) {
+  if (!accountButton) return;
+  accountButton.dataset.signedIn = user ? "true" : "false";
+  accountButton.disabled = !ready;
+  if (!ready) {
+    accountButton.textContent = "確認帳號中…";
+    accountButton.title = "正在還原共用帳號登入狀態";
+  } else if (user) {
+    accountButton.textContent = `帳號：${user.displayName || "已登入"}`;
+    accountButton.title = "已連結共用帳號；點擊管理帳號";
+  } else {
+    accountButton.textContent = error ? "帳號服務暫不可用" : "登入／註冊";
+    accountButton.title = error || "前往共用帳號中心";
+  }
+}
+
+async function initializeAccountIntegration() {
+  const auth = window.SITE_AUTH;
+  if (!auth) {
+    renderAccountState(null, true, "找不到共用帳號狀態入口。");
+    return;
+  }
+  renderAccountState(null, false);
+  try {
+    const initial = await auth.readyPromise;
+    renderAccountState(initial.user, true, initial.error);
+  } catch (error) {
+    renderAccountState(null, true, error.message);
+  }
+  window.addEventListener("site:auth-state", event => {
+    renderAccountState(event.detail.user, true, event.detail.error);
+  });
+}
 
 function showNotice(text) {
   notice.textContent = text;
@@ -387,6 +430,8 @@ document.querySelectorAll("[data-mode]").forEach(button => {
   });
 });
 document.querySelector("#back-home").addEventListener("click", returnHome);
+accountButton.addEventListener("click", () => window.location.assign(getAccountCenterUrl()));
+initializeAccountIntegration();
 inspectorPanel.addEventListener("toggle", () => { if (inspectorPanel.open) renderInspector(); });
 logisticsPanel.addEventListener("toggle", () => { if (logisticsPanel.open) renderInspector(); });
 document.querySelectorAll(".panel-group").forEach(panel => panel.addEventListener("toggle", () => {
