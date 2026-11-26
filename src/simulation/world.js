@@ -91,7 +91,7 @@ export function advanceWorld(world, dt) {
 
   for (const structure of world.structures) {
     if (structure.kind !== "outpost" || structure.owner === "player") continue;
-    if (world.units.some(unit => unit.owner === "player" && unit.x === structure.x && unit.y === structure.y)) {
+    if (world.units.some(unit => unit.owner === "player" && Math.abs(unit.x - structure.x) + Math.abs(unit.y - structure.y) <= 1)) {
       structure.owner = "player";
       world.cells[structure.y][structure.x].owner = "player";
     }
