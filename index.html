@@ -41,46 +41,72 @@
       </div>
       <div class="game-layout">
         <aside class="side-panel">
-          <div class="panel-section">
-            <p class="panel-label">戰場狀態</p>
-            <div class="stat-row"><span>模擬時間</span><strong id="time-value">00:00</strong></div>
-            <div class="stat-row"><span>我方單位</span><strong id="unit-value">3</strong></div>
-            <div class="stat-row"><span>建築數量</span><strong id="building-value">1</strong></div>
-            <div class="stat-row"><span>控制區域</span><strong id="territory-value">1</strong></div>
-            <p class="sub-label">總部資源</p><div id="hq-resource-list" class="hq-resource-list"></div>
-          </div>
-          <div class="panel-section">
-            <p class="panel-label">建築建造</p>
-            <div class="build-grid">
-              <button class="build-button" data-build="lumberCamp">伐木場 <small>地表開採 · 35 木 / 10 石</small></button>
-              <button class="build-button" data-build="quarry">採石場 <small>地表開採 · 30 木 / 15 石</small></button>
-              <button class="build-button" data-build="oilWell">油井 <small>地表開採 · 45 木 / 35 石</small></button>
-              <button class="build-button" data-build="metalMine">金屬礦場 <small>需鄰近金屬礦 · 40 木 / 30 石</small></button>
-              <button class="build-button" data-build="warehouse">倉庫 <small>65 木 / 55 石</small></button>
-              <button class="build-button" data-build="factory">工廠 <small>90 木 / 90 石</small></button>
-            </div>
-            <p id="build-hint" class="help-line">選擇建築後，在地圖上點擊放置。</p>
-            <button id="cancel-build" class="small-button full-width" hidden>取消建造（Esc）</button>
-          </div>
-          <div class="panel-section">
-            <p class="panel-label">操作說明</p>
-            <p class="help-line"><kbd>左鍵</kbd> 選取／框選單位</p>
-            <p class="help-line"><kbd>Shift</kbd> 加選單位</p>
-            <p class="help-line"><kbd>右鍵</kbd> 群體移動</p>
-            <p class="help-line"><kbd>中鍵拖曳</kbd> 移動鏡頭</p>
-            <p class="help-line"><kbd>滾輪</kbd> 縮放地圖</p>
-            <p class="help-line"><kbd>空白鍵</kbd> 暫停／繼續</p>
-          </div>
-          <div class="panel-section inspector-section">
-            <p class="panel-label">選取資訊</p>
-            <div id="inspector"><p class="muted-copy">選取單位或建築以查看資訊。</p></div>
-          </div>
-          <div class="panel-section transfer-section" id="transfer-section" hidden>
-            <p class="panel-label">手動物資調撥</p>
-            <div id="transfer-form"></div>
-          </div>
-          <div class="objective-card"><span class="objective-kicker">PRIMARY OBJECTIVE</span><strong>佔領敵方總指揮部</strong><p>將至少一支我方單位移動至敵方指揮部周圍，即可完成佔領。</p></div>
-        </aside>
+          <details class="panel-group">
+            <summary><span>戰場概況</span><small>STATUS / RESOURCE</small></summary>
+                      <div class="panel-section">
+                        <p class="panel-label">戰場狀態</p>
+                        <div class="stat-row"><span>模擬時間</span><strong id="time-value">00:00</strong></div>
+                        <div class="stat-row"><span>我方單位</span><strong id="unit-value">3</strong></div>
+                        <div class="stat-row"><span>建築數量</span><strong id="building-value">1</strong></div>
+                        <div class="stat-row"><span>控制區域</span><strong id="territory-value">1</strong></div>
+                        <p class="sub-label">總部資源</p><div id="hq-resource-list" class="hq-resource-list"></div>
+                      </div>
+          </details>
+          <details class="panel-group">
+            <summary><span>建置管理</span><small>CONSTRUCTION</small></summary>
+                      <div class="panel-section">
+                        <p class="panel-label">建築建造</p>
+                        <div class="build-grid">
+                          <button class="build-button" data-build="lumberCamp">伐木場 <small>地表開採 · 35 木 / 10 石</small></button>
+                          <button class="build-button" data-build="quarry">採石場 <small>地表開採 · 30 木 / 15 石</small></button>
+                          <button class="build-button" data-build="oilWell">油井 <small>地表開採 · 45 木 / 35 石</small></button>
+                          <button class="build-button" data-build="metalMine">金屬礦場 <small>需鄰近金屬礦 · 40 木 / 30 石</small></button>
+                          <button class="build-button" data-build="warehouse">倉庫 <small>65 木 / 55 石</small></button>
+                          <button class="build-button" data-build="factory">工廠 <small>90 木 / 90 石</small></button>
+                        </div>
+                        <p id="build-hint" class="help-line">選擇建築後，在地圖上點擊放置。</p>
+                        <button id="cancel-build" class="small-button full-width" hidden>取消建造（Esc）</button>
+                      </div>
+          </details>
+          <details class="panel-group" id="inspector-panel">
+            <summary><span>單位與建築資訊</span><small>INSPECTOR / PRODUCTION</small></summary>
+                      <div class="panel-section inspector-section">
+                        <p class="panel-label">選取資訊</p>
+                        <div id="inspector"><p class="muted-copy">選取單位或建築以查看資訊。</p></div>
+                      </div>
+          </details>
+          <details class="panel-group" id="logistics-panel">
+            <summary><span>物流與物資調撥</span><small>LOGISTICS</small></summary>
+                      <div class="panel-section transfer-section" id="transfer-section" hidden>
+                        <p class="panel-label">手動物資調撥</p>
+                        <div id="transfer-form"></div>
+                      </div>
+          </details>
+          <details class="panel-group">
+            <summary><span>建築升級</span><small>UPGRADES / 尚未開放</small></summary>
+            <div class="panel-section"><p class="muted-copy">建築等級與品質數值已存在於模擬資料；升級介面及升級規則尚未實作。</p></div>
+          </details>
+          <details class="panel-group">
+            <summary><span>科技樹</span><small>RESEARCH / 尚未開放</small></summary>
+            <div class="panel-section"><p class="muted-copy">科技樹目前尚未實作。此區將獨立管理科技解鎖、研究進度與前置條件。</p></div>
+          </details>
+          <details class="panel-group">
+            <summary><span>操作說明</span><small>CONTROLS</small></summary>
+                      <div class="panel-section">
+                        <p class="panel-label">操作說明</p>
+                        <p class="help-line"><kbd>左鍵</kbd> 選取／框選單位</p>
+                        <p class="help-line"><kbd>Shift</kbd> 加選單位</p>
+                        <p class="help-line"><kbd>右鍵</kbd> 群體移動</p>
+                        <p class="help-line"><kbd>中鍵拖曳</kbd> 移動鏡頭</p>
+                        <p class="help-line"><kbd>滾輪</kbd> 縮放地圖</p>
+                        <p class="help-line"><kbd>空白鍵</kbd> 暫停／繼續</p>
+                      </div>
+          </details>
+          <details class="panel-group">
+            <summary><span>任務目標</span><small>OBJECTIVE</small></summary>
+                      <div class="objective-card"><span class="objective-kicker">PRIMARY OBJECTIVE</span><strong>佔領敵方總指揮部</strong><p>將至少一支我方單位移動至敵方指揮部周圍，即可完成佔領。</p></div>
+                    </aside>
+          </details>
         <div class="map-frame">
           <div class="map-heading"><span>TACTICAL MAP</span><span>48 × 32 GRID · <span id="zoom-value">100%</span></span></div>
           <canvas id="game-canvas" aria-label="Hanexo 戰場網格"></canvas>
