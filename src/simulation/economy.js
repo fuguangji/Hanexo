@@ -2,8 +2,8 @@ export const RESOURCE_DEFINITIONS = {
   wood: { label: "木頭", color: "#b68a55" },
   stone: { label: "石頭", color: "#aab6bd" },
   oil: { label: "石油", color: "#d3ad59" },
-  iron: { label: "鐵", color: "#a5aeb7" },
-  copper: { label: "銅", color: "#d58a62" },
+  commonMetal: { label: "普通金屬", color: "#aeb8bf" },
+  rareMetal: { label: "稀有金屬", color: "#d5a45c" },
   steel: { label: "鋼", color: "#d8e0e8" },
   arrow: { label: "箭", color: "#d3b57c" },
   ammunition: { label: "子彈", color: "#e3c17b" },
@@ -15,11 +15,8 @@ export const RESOURCE_DEFINITIONS = {
 };
 
 export const RESOURCE_NODE_DEFINITIONS = {
-  forest: { resource: "wood", label: "森林", amount: 1600, color: "#477e61" },
-  stone: { resource: "stone", label: "石礦", amount: 1500, color: "#8d9ba2" },
-  oil: { resource: "oil", label: "油田", amount: 1200, color: "#c69a4b" },
-  iron: { resource: "iron", label: "鐵礦", amount: 1500, color: "#a0aab3" },
-  copper: { resource: "copper", label: "銅礦", amount: 1300, color: "#ce865e" }
+  commonMetal: { resource: "commonMetal", label: "普通金屬礦", amount: 2400, color: "#9caab4", grade: "common" },
+  rareMetal: { resource: "rareMetal", label: "稀有金屬礦", amount: 1200, color: "#d6a24f", grade: "rare" }
 };
 
 export const BUILDING_DEFINITIONS = {
@@ -34,16 +31,16 @@ export const BUILDING_DEFINITIONS = {
 
 export const RECIPES = {
   steel: {
-    id: "steel", label: "煉鋼", inputs: { iron: 3, stone: 1 }, outputs: { steel: 2 }, byproducts: { slag: 1 }, duration: 5
+    id: "steel", label: "煉鋼", inputs: { commonMetal: 3, stone: 1 }, outputs: { steel: 2 }, byproducts: { slag: 1 }, duration: 5
   },
   arrows: {
     id: "arrows", label: "製箭", inputs: { wood: 2, steel: 1 }, outputs: { arrow: 4 }, byproducts: { scrap: 0.2 }, duration: 3
   },
   ammunition: {
-    id: "ammunition", label: "彈藥", inputs: { copper: 2, steel: 1, oil: 1 }, outputs: { ammunition: 4 }, byproducts: { scrap: 0.5 }, duration: 4
+    id: "ammunition", label: "彈藥", inputs: { commonMetal: 2, steel: 1, oil: 1 }, outputs: { ammunition: 4 }, byproducts: { scrap: 0.5 }, duration: 4
   },
   battery: {
-    id: "battery", label: "電池", inputs: { copper: 1, iron: 1 }, outputs: { battery: 1 }, byproducts: { chemicalWaste: 0.2 }, duration: 4
+    id: "battery", label: "電池", inputs: { commonMetal: 2 }, outputs: { battery: 1 }, byproducts: { chemicalWaste: 0.2 }, duration: 4
   },
   coolant: {
     id: "coolant", label: "冷凍劑", inputs: { stone: 1, battery: 1 }, outputs: { coolant: 1 }, byproducts: { chemicalWaste: 0.25 }, duration: 5
