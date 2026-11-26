@@ -43,6 +43,17 @@ test("surface extractors can be placed on empty land while metal mines require o
   assert.equal(mineNearCommonOre.ok, true);
   advanceWorld(world, 3);
   assert.ok(mineNearCommonOre.building.inventory.commonMetal >= 1);
+
+  const mineNearRareOre = buildAt(world, "metalMine", 33, 6);
+  assert.equal(mineNearRareOre.ok, true);
+  const quarry = buildAt(world, "quarry", 12, 8);
+  const oilWell = buildAt(world, "oilWell", 14, 8);
+  assert.equal(quarry.ok, true);
+  assert.equal(oilWell.ok, true);
+  advanceWorld(world, 3);
+  assert.ok(mineNearRareOre.building.inventory.rareMetal >= 1);
+  assert.ok(quarry.building.inventory.stone >= 1);
+  assert.ok(oilWell.building.inventory.oil >= 1);
 });
 
 test("manual transfer moves inventory between independent buildings", () => {
