@@ -105,36 +105,139 @@ export function createRenderer(canvas) {
     const cx = camera.x + (structure.x + 0.5) * tile;
     const cy = camera.y + (structure.y + 0.5) * tile;
     const definition = BUILDING_DEFINITIONS[structure.type];
-    const color = structure.owner === "player" ? (definition?.color || COLORS.player) : structure.owner === "enemy" ? COLORS.enemy : COLORS.neutral;
-    const size = tile * (structure.type === "hq" ? 0.76 : 0.66);
-    ctx.fillStyle = color;
-    ctx.strokeStyle = selected ? "#fff1c8" : "#101619";
-    ctx.lineWidth = selected ? 3 : 1.5;
+    const ownerColor = structure.owner === "player"
+      ? (definition?.color || COLORS.player)
+      : structure.owner === "enemy" ? COLORS.enemy : COLORS.neutral;
+    const s = tile * (structure.type === "hq" ? 0.88 : 0.78);
+    const left = cx - s / 2;
+    const top = cy - s / 2;
+
+    // Reinforced concrete foundation and dark cast shadow.
+    ctx.fillStyle = "rgba(0,0,0,.42)";
+    ctx.fillRect(left + tile * 0.08, top + tile * 0.12, s, s);
+    ctx.fillStyle = "#171d20";
+    ctx.fillRect(left - tile * 0.04, top - tile * 0.04, s + tile * 0.08, s + tile * 0.08);
+    ctx.strokeStyle = selected ? "#fff0c4" : "#697276";
+    ctx.lineWidth = selected ? 2.5 : 1;
+    ctx.strokeRect(left - tile * 0.04, top - tile * 0.04, s + tile * 0.08, s + tile * 0.08);
+
     if (structure.type === "outpost") {
+      ctx.fillStyle = ownerColor;
       ctx.beginPath();
-      ctx.moveTo(cx, cy - size * 0.65);
-      ctx.lineTo(cx + size * 0.65, cy);
-      ctx.lineTo(cx, cy + size * 0.65);
-      ctx.lineTo(cx - size * 0.65, cy);
+      ctx.moveTo(cx, top - tile * 0.08);
+      ctx.lineTo(left + s + tile * 0.08, cy);
+      ctx.lineTo(cx, top + s + tile * 0.08);
+      ctx.lineTo(left - tile * 0.08, cy);
       ctx.closePath();
       ctx.fill();
+      ctx.strokeStyle = "#161c1f";
+      ctx.lineWidth = 2;
       ctx.stroke();
-    } else {
-      ctx.fillRect(cx - size / 2, cy - size / 2, size, size);
-      ctx.strokeRect(cx - size / 2, cy - size / 2, size, size);
       ctx.fillStyle = "#171d20";
-      ctx.font = `bold ${Math.max(8, tile * 0.36)}px sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      const symbol = structure.type === "hq" ? "HQ" : structure.type === "factory" ? "F" : structure.type === "warehouse" ? "W" : structure.type === "metalMine" ? "M" : structure.type === "oilWell" ? "O" : structure.type === "lumberCamp" ? "L" : "Q";
-      ctx.fillText(symbol, cx, cy);
+      ctx.fillRect(cx - tile * 0.08, cy - tile * 0.08, tile * 0.16, tile * 0.16);
+    } else {
+      ctx.fillStyle = ownerColor;
+      ctx.fillRect(left, top, s, s);
+      ctx.strokeStyle = "#121719";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(left, top, s, s);
+
+      // Structural seams and equipment vary by facility.
+      ctx.strokeStyle = "rgba(15,20,22,.62)";
+      ctx.lineWidth = Math.max(1, tile * 0.035);
+      ctx.beginPath();
+      ctx.moveTo(left + s * 0.12, top + s * 0.72);
+      ctx.lineTo(left + s * 0.88, top + s * 0.72);
+      ctx.moveTo(left + s * 0.18, top + s * 0.12);
+      ctx.lineTo(left + s * 0.18, top + s * 0.66);
+      ctx.stroke();
+
+      if (structure.type === "hq") {
+        ctx.fillStyle = "#303a3e";
+        ctx.fillRect(cx - s * 0.27, cy - s * 0.24, s * 0.54, s * 0.52);
+        ctx.fillStyle = "#c9a25c";
+        ctx.fillRect(cx - s * 0.31, cy - s * 0.29, s * 0.62, s * 0.1);
+        ctx.fillStyle = "#e9e2d0";
+        ctx.fillRect(cx - s * 0.035, cy - s * 0.42, s * 0.07, s * 0.2);
+        ctx.fillRect(cx + s * 0.18, cy - s * 0.12, s * 0.06, s * 0.18);
+      } else if (structure.type === "factory") {
+        ctx.fillStyle = "#252d30";
+        ctx.fillRect(left + s * 0.12, top + s * 0.28, s * 0.76, s * 0.52);
+        ctx.fillStyle = "#b5b5a9";
+        ctx.fillRect(left + s * 0.2, top + s * 0.17, s * 0.13, s * 0.12);
+        ctx.fillRect(left + s * 0.42, top + s * 0.17, s * 0.13, s * 0.12);
+        ctx.fillRect(left + s * 0.64, top + s * 0.17, s * 0.13, s * 0.12);
+        ctx.fillStyle = "#d8a64f";
+        ctx.fillRect(left + s * 0.72, top - s * 0.12, s * 0.13, s * 0.4);
+        ctx.fillStyle = "#171d20";
+        ctx.fillRect(left + s * 0.75, top - s * 0.16, s * 0.2, s * 0.08);
+      } else if (structure.type === "warehouse") {
+        ctx.fillStyle = "#343e42";
+        ctx.fillRect(left + s * 0.1, top + s * 0.2, s * 0.8, s * 0.58);
+        ctx.strokeStyle = "#aeb6b4";
+        ctx.beginPath();
+        for (let i = 1; i <= 3; i++) {
+          ctx.moveTo(left + s * (0.1 + i * 0.2), top + s * 0.22);
+          ctx.lineTo(left + s * (0.1 + i * 0.2), top + s * 0.75);
+        }
+        ctx.stroke();
+      } else if (structure.type === "metalMine") {
+        ctx.strokeStyle = "#22292c";
+        ctx.lineWidth = Math.max(2, tile * 0.075);
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.22, cy + s * 0.34);
+        ctx.lineTo(cx - s * 0.1, cy - s * 0.25);
+        ctx.lineTo(cx + s * 0.1, cy - s * 0.25);
+        ctx.lineTo(cx + s * 0.22, cy + s * 0.34);
+        ctx.moveTo(cx - s * 0.3, cy - s * 0.25);
+        ctx.lineTo(cx + s * 0.3, cy - s * 0.25);
+        ctx.stroke();
+        ctx.fillStyle = "#d6a24f";
+        ctx.fillRect(cx - s * 0.06, cy - s * 0.34, s * 0.12, s * 0.13);
+      } else if (structure.type === "oilWell") {
+        ctx.strokeStyle = "#252c2f";
+        ctx.lineWidth = Math.max(2, tile * 0.075);
+        ctx.beginPath();
+        ctx.moveTo(cx, top + s * 0.12);
+        ctx.lineTo(cx - s * 0.2, top + s * 0.78);
+        ctx.moveTo(cx, top + s * 0.12);
+        ctx.lineTo(cx + s * 0.2, top + s * 0.78);
+        ctx.moveTo(cx - s * 0.28, top + s * 0.25);
+        ctx.lineTo(cx + s * 0.28, top + s * 0.25);
+        ctx.stroke();
+        ctx.fillStyle = "#171d20";
+        ctx.fillRect(cx - s * 0.32, top + s * 0.18, s * 0.64, s * 0.09);
+      } else if (structure.type === "lumberCamp") {
+        ctx.fillStyle = "#282f2e";
+        ctx.fillRect(left + s * 0.12, top + s * 0.18, s * 0.76, s * 0.48);
+        ctx.fillStyle = "#c69a62";
+        for (let i = 0; i < 3; i++) {
+          ctx.fillRect(left + s * 0.2, top + s * (0.24 + i * 0.13), s * 0.6, s * 0.055);
+        }
+      } else if (structure.type === "quarry") {
+        ctx.fillStyle = "#30383b";
+        ctx.fillRect(cx - s * 0.22, cy - s * 0.22, s * 0.44, s * 0.48);
+        ctx.fillStyle = "#d0d0c3";
+        ctx.fillRect(cx - s * 0.3, cy - s * 0.3, s * 0.6, s * 0.12);
+        ctx.strokeStyle = "#20272a";
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - s * 0.14, cy - s * 0.1);
+        ctx.lineTo(cx + s * 0.14, cy + s * 0.2);
+        ctx.moveTo(cx + s * 0.14, cy - s * 0.1);
+        ctx.lineTo(cx - s * 0.14, cy + s * 0.2);
+        ctx.stroke();
+      }
     }
+
     if (selected) {
       ctx.beginPath();
-      ctx.arc(cx, cy, tile * 0.48, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(255,255,255,.75)";
-      ctx.lineWidth = 1;
+      ctx.arc(cx, cy, tile * 0.52, 0, Math.PI * 2);
+      ctx.strokeStyle = "#f3d28e";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([tile * 0.12, tile * 0.08]);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
