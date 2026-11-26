@@ -51,6 +51,10 @@ jobs:
             npm install
           fi
 
+      - name: Run simulation tests
+        if: steps.app.outputs.ready == 'true'
+        run: npm test
+
       - name: Build production site
         if: steps.app.outputs.ready == 'true'
         run: npm run build
