@@ -33,15 +33,10 @@ export function createWorld() {
       makeBuilding("outpost-2", "outpost", "neutral", 24, 25, {}, "南部據點")
     ],
     resourceNodes: [
-      makeResourceNode("node-wood-1", "forest", 11, 5),
-      makeResourceNode("node-wood-2", "forest", 10, 27),
-      makeResourceNode("node-stone-1", "stone", 16, 14),
-      makeResourceNode("node-stone-2", "stone", 29, 27),
-      makeResourceNode("node-iron-1", "iron", 21, 5),
-      makeResourceNode("node-iron-2", "iron", 34, 13),
-      makeResourceNode("node-copper-1", "copper", 34, 6),
-      makeResourceNode("node-copper-2", "copper", 16, 26),
-      makeResourceNode("node-oil-1", "oil", 38, 23)
+      makeResourceNode("node-common-1", "commonMetal", 21, 5),
+      makeResourceNode("node-common-2", "commonMetal", 34, 13),
+      makeResourceNode("node-rare-1", "rareMetal", 34, 6),
+      makeResourceNode("node-rare-2", "rareMetal", 16, 26)
     ],
     transferOrders: [],
     capturedCells: 1
@@ -166,8 +161,8 @@ export function buildAt(world, type, x, y) {
   if (world.units.some(unit => unit.x === x && unit.y === y)) return { ok: false, reason: "請先移開該位置的單位。" };
   const hq = world.structures.find(item => item.id === "hq-player");
   if (!hq || !hasInputs(hq.inventory, definition.cost)) return { ok: false, reason: "總部庫存不足。" };
-  if (definition.extractor && !findNearbyResourceNode(world, type, x, y)) {
-    return { ok: false, reason: "附近沒有符合此建築的資源節點。" };
+  if (type === "metalMine" && !findNearbyResourceNode(world, type, x, y)) {
+    return { ok: false, reason: "金屬礦場必須建在普通金屬礦或稀有金屬礦附近（3 格內）。" };
   }
   for (const [resource, amount] of Object.entries(definition.cost)) hq.inventory[resource] -= amount;
   const id = `building-${world.nextEntityId++}`;
@@ -182,8 +177,9 @@ export function buildAt(world, type, x, y) {
 
 function findNearbyResourceNode(world, buildingType, x, y) {
   const extractor = BUILDING_DEFINITIONS[buildingType].extractor;
+  if (extractor !== "metal") return null;
   return world.resourceNodes
-    .filter(node => (extractor === "metal" ? ["iron", "copper"].includes(node.resource) : node.resource === extractor))
+    .filter(node => ["commonMetal", "rareMetal"].includes(node.resource))
     .filter(node => Math.abs(node.x - x) + Math.abs(node.y - y) <= 3 && node.amount > 0)
     .sort((a, b) => Math.abs(a.x - x) + Math.abs(a.y - y) - Math.abs(b.x - x) - Math.abs(b.y - y))[0] || null;
 }
@@ -280,16 +276,18 @@ function advanceExtraction(world, dt) {
     if (!definition?.extractor) continue;
     building.extractProgress += dt * EXTRACT_RATE;
     while (building.extractProgress >= 1) {
-      const node = findNearbyResourceNode(world, building.type, building.x, building.y);
-      if (!node || !canFit(building, { [node.resource]: 1 })) {
+      const extractor = definition.extractor;
+      const node = extractor === "metal" ? findNearbyResourceNode(world, building.type, building.x, building.y) : null;
+      const resource = extractor === "metal" ? node?.resource : extractor;
+      if (!resource || !canFit(building, { [resource]: 1 })) {
         building.extractProgress = Math.min(building.extractProgress, 0.999);
         break;
       }
-      node.amount = Math.max(0, node.amount - 1);
-      building.inventory[node.resource] = (building.inventory[node.resource] || 0) + 1;
+      if (node) node.amount = Math.max(0, node.amount - 1);
+      building.inventory[resource] = (building.inventory[resource] || 0) + 1;
       building.extractProgress -= 1;
     }
-    if (!findNearbyResourceNode(world, building.type, building.x, building.y)) building.blockedReason = "附近資源已耗盡";
+    if (definition.extractor === "metal" && !findNearbyResourceNode(world, building.type, building.x, building.y)) building.blockedReason = "附近金屬礦點已耗盡或不存在";
     else if (inventoryUsed(building.inventory) >= building.capacity) building.blockedReason = "庫存已滿";
     else building.blockedReason = null;
   }
