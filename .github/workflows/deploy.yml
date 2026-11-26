@@ -1,7 +1,10 @@
-name: Deploy HANEXO
+name: Build HANEXO
 
 on:
   push:
+    branches:
+      - main
+  pull_request:
     branches:
       - main
   workflow_dispatch:
@@ -10,12 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: hanexo-deployment
-  cancel-in-progress: false
+  group: hanexo-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-deploy:
-    name: Build and publish to GitHub Pages repository
+  build:
+    name: Test and build HANEXO
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -29,10 +32,9 @@ jobs:
         run: |
           if [ ! -f package.json ]; then
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::package.json does not exist yet. Deployment skipped."
+            echo "::notice::package.json does not exist yet. Build skipped."
             exit 0
           fi
-
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js
@@ -40,6 +42,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
       - name: Install dependencies
         if: steps.app.outputs.ready == 'true'
@@ -63,41 +66,16 @@ jobs:
         if: steps.app.outputs.ready == 'true'
         shell: bash
         run: |
-          if [ ! -s dist/index.html ]; then
+          test -s dist/index.html || {
             echo "::error::Build output is missing dist/index.html."
             exit 1
-          fi
+          }
 
-      - name: Checkout website repository
+      - name: Upload production build
         if: steps.app.outputs.ready == 'true'
-        uses: actions/checkout@v4
+        uses: actions/upload-artifact@v4
         with:
-          repository: fuguangji/fuguangji.github.io
-          ref: main
-          token: ${{ secrets.WEBSITE_DEPLOY_TOKEN }}
-          path: website
-          fetch-depth: 0
-
-      - name: Publish HANEXO build
-        if: steps.app.outputs.ready == 'true'
-        shell: bash
-        run: |
-          mkdir -p website/game/Hanexo
-          rsync -a --delete dist/ website/game/Hanexo/
-          touch website/game/Hanexo/.nojekyll
-
-      - name: Commit and push website deployment
-        if: steps.app.outputs.ready == 'true'
-        shell: bash
-        run: |
-          git -C website config user.name "github-actions[bot]"
-          git -C website config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git -C website add -- game/Hanexo
-
-          if git -C website diff --cached --quiet; then
-            echo "Published files are already up to date."
-          else
-            git -C website commit -m "Deploy HANEXO from ${{ github.sha }}"
-            git -C website push origin HEAD:main
-          fi
+          name: hanexo-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
