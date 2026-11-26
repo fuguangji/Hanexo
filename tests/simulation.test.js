@@ -49,12 +49,12 @@ test("manual transfer moves inventory between independent buildings", () => {
   const world = createWorld();
   const built = buildAt(world, "factory", 10, 17);
   assert.equal(built.ok, true);
-  const order = createTransferOrder(world, "hq-player", built.building.id, "iron", 10);
+  const order = createTransferOrder(world, "hq-player", built.building.id, "commonMetal", 10);
   assert.equal(order.ok, true);
-  assert.equal(world.structures.find(item => item.id === "hq-player").inventory.iron, 30);
-  assert.equal(built.building.inventory.iron, undefined);
+  assert.equal(world.structures.find(item => item.id === "hq-player").inventory.commonMetal, 60);
+  assert.equal(built.building.inventory.commonMetal, undefined);
   advanceWorld(world, 10);
-  assert.equal(built.building.inventory.iron, 10);
+  assert.equal(built.building.inventory.commonMetal, 10);
 });
 
 test("factory production consumes inputs and creates products plus byproducts", () => {
