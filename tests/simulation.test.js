@@ -30,13 +30,19 @@ test("single selection can select a building", () => {
   assert.equal(world.selectedBuildingId, "hq-player");
 });
 
-test("extractor construction requires a nearby resource and gathers into its own inventory", () => {
+test("surface extractors can be placed on empty land while metal mines require one of two ore deposits", () => {
   const world = createWorld();
   const result = buildAt(world, "lumberCamp", 10, 6);
   assert.equal(result.ok, true);
   advanceWorld(world, 3);
   assert.ok(result.building.inventory.wood >= 1);
   assert.equal(world.structures.find(item => item.id === "hq-player").inventory.wood, 265);
+  const mineWithoutDeposit = buildAt(world, "metalMine", 12, 12);
+  assert.equal(mineWithoutDeposit.ok, false);
+  const mineNearCommonOre = buildAt(world, "metalMine", 20, 5);
+  assert.equal(mineNearCommonOre.ok, true);
+  advanceWorld(world, 3);
+  assert.ok(mineNearCommonOre.building.inventory.commonMetal >= 1);
 });
 
 test("manual transfer moves inventory between independent buildings", () => {
@@ -56,13 +62,13 @@ test("factory production consumes inputs and creates products plus byproducts", 
   const built = buildAt(world, "factory", 10, 17);
   assert.equal(built.ok, true);
   const factory = built.building;
-  factory.inventory.iron = 10;
+  factory.inventory.commonMetal = 10;
   factory.inventory.stone = 10;
   assert.equal(addProductionJob(world, factory.id, "steel").ok, true);
   advanceWorld(world, 21);
   assert.ok(factory.inventory.steel >= 2);
   assert.ok(factory.inventory.slag >= 1);
-  assert.ok(factory.inventory.iron < 10);
+  assert.ok(factory.inventory.commonMetal < 10);
   assert.ok(factory.jobs[0].allocation <= 100);
 });
 
