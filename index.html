@@ -12,7 +12,7 @@
   <main class="app-shell">
     <header class="topbar">
       <a class="brand" href="./"><span class="brand-mark">H</span><span>HANEXO</span></a>
-      <div class="topbar-meta"><span class="status-dot"></span><span>LOCAL SIMULATION</span><span class="version">PROTOTYPE 0.1</span></div>
+      <div class="topbar-meta"><span class="status-dot"></span><span>LOCAL SIMULATION</span><span id="version-label" class="version">M1–M3</span></div>
     </header>
     <section id="home-screen" class="screen home-screen">
       <div class="hero-section">
@@ -22,15 +22,15 @@
         <div class="mode-grid">
           <button class="mode-card" data-mode="server"><span class="mode-index">01</span><strong>公服模式</strong><small>官方世界 · 尚未開放</small></button>
           <button class="mode-card" data-mode="private"><span class="mode-index">02</span><strong>私人聯機</strong><small>房主模擬 · 尚未開放</small></button>
-          <button class="mode-card primary" data-mode="personal"><span class="mode-index">03</span><strong>個人模式</strong><small>本機模擬 · 原型可玩</small></button>
+          <button class="mode-card primary" data-mode="personal"><span class="mode-index">03</span><strong>個人模式</strong><small>本機模擬 · M1–M3 原型</small></button>
         </div>
-        <p class="home-footnote">目前版本為核心玩法原型，完整生產與科技系統正在規劃中。</p>
+        <p class="home-footnote">本機模擬，不需要登入或連線即可遊玩。</p>
       </div>
     </section>
     <section id="game-screen" class="screen game-screen" hidden>
       <div class="game-toolbar">
         <button id="back-home" class="ghost-button">← 主選單</button>
-        <div class="game-title"><strong>FRONTIER / 01</strong><span>佔領敵方總指揮部</span></div>
+        <div class="game-title"><strong>FRONTIER / 01</strong><span>建立工業體系，佔領敵方總指揮部</span></div>
         <div class="time-controls">
           <span id="clock-state" class="clock-state">運行中</span>
           <button id="pause-button" class="small-button">暫停</button>
@@ -45,21 +45,46 @@
             <p class="panel-label">戰場狀態</p>
             <div class="stat-row"><span>模擬時間</span><strong id="time-value">00:00</strong></div>
             <div class="stat-row"><span>我方單位</span><strong id="unit-value">3</strong></div>
-            <div class="stat-row"><span>控制區域</span><strong id="territory-value">0</strong></div>
+            <div class="stat-row"><span>建築數量</span><strong id="building-value">1</strong></div>
+            <div class="stat-row"><span>控制區域</span><strong id="territory-value">1</strong></div>
+            <p class="sub-label">總部資源</p><div id="hq-resource-list" class="hq-resource-list"></div>
+          </div>
+          <div class="panel-section">
+            <p class="panel-label">建築建造</p>
+            <div class="build-grid">
+              <button class="build-button" data-build="lumberCamp">伐木場 <small>35 木 / 10 石</small></button>
+              <button class="build-button" data-build="quarry">採石場 <small>30 木 / 15 石</small></button>
+              <button class="build-button" data-build="oilWell">油井 <small>45 木 / 35 石</small></button>
+              <button class="build-button" data-build="metalMine">金屬礦場 <small>40 木 / 30 石</small></button>
+              <button class="build-button" data-build="warehouse">倉庫 <small>65 木 / 55 石</small></button>
+              <button class="build-button" data-build="factory">工廠 <small>90 木 / 90 石</small></button>
+            </div>
+            <p id="build-hint" class="help-line">選擇建築後，在地圖上點擊放置。</p>
+            <button id="cancel-build" class="small-button full-width" hidden>取消建造（Esc）</button>
           </div>
           <div class="panel-section">
             <p class="panel-label">操作說明</p>
-            <p class="help-line"><kbd>左鍵</kbd> 選取我方單位</p>
-            <p class="help-line"><kbd>右鍵</kbd> 移動選取單位</p>
+            <p class="help-line"><kbd>左鍵</kbd> 選取／框選單位</p>
+            <p class="help-line"><kbd>Shift</kbd> 加選單位</p>
+            <p class="help-line"><kbd>右鍵</kbd> 群體移動</p>
+            <p class="help-line"><kbd>中鍵拖曳</kbd> 移動鏡頭</p>
+            <p class="help-line"><kbd>滾輪</kbd> 縮放地圖</p>
             <p class="help-line"><kbd>空白鍵</kbd> 暫停／繼續</p>
           </div>
-          <div class="panel-section selection-panel"><p class="panel-label">選取資訊</p><p id="selection-info" class="muted-copy">尚未選取單位</p></div>
+          <div class="panel-section inspector-section">
+            <p class="panel-label">選取資訊</p>
+            <div id="inspector"><p class="muted-copy">選取單位或建築以查看資訊。</p></div>
+          </div>
+          <div class="panel-section transfer-section" id="transfer-section" hidden>
+            <p class="panel-label">手動物資調撥</p>
+            <div id="transfer-form"></div>
+          </div>
           <div class="objective-card"><span class="objective-kicker">PRIMARY OBJECTIVE</span><strong>佔領敵方總指揮部</strong><p>將至少一支我方單位移動至敵方指揮部周圍，即可完成佔領。</p></div>
         </aside>
         <div class="map-frame">
-          <div class="map-heading"><span>TACTICAL MAP</span><span>GRID 32 × 22</span></div>
+          <div class="map-heading"><span>TACTICAL MAP</span><span>48 × 32 GRID · <span id="zoom-value">100%</span></span></div>
           <canvas id="game-canvas" aria-label="Hanexo 戰場網格"></canvas>
-          <div id="game-message" class="game-message" aria-live="polite">選取單位，再以滑鼠右鍵指定移動位置。</div>
+          <div id="game-message" class="game-message" aria-live="polite">選取單位，再以滑鼠右鍵指定目的地。資源節點以圓形標示。</div>
         </div>
       </div>
     </section>
