@@ -18,13 +18,13 @@
       <div class="hero-section">
         <p class="eyebrow">REAL-TIME STRATEGY · INDUSTRIAL SIMULATION</p>
         <h1>HANEXO</h1>
-        <p class="hero-copy">生產。資源。物流。能源。<br />建立你的工業體系，並取得戰場主導權。</p>
+        <p class="hero-copy">鋼鐵、燃料、產線與補給。<br />從一座前進基地，建立完整的工業戰區。</p>
         <div class="mode-grid">
           <button class="mode-card" data-mode="server"><span class="mode-index">01</span><strong>公服模式</strong><small>官方世界 · 尚未開放</small></button>
           <button class="mode-card" data-mode="private"><span class="mode-index">02</span><strong>私人聯機</strong><small>房主模擬 · 尚未開放</small></button>
           <button class="mode-card primary" data-mode="personal"><span class="mode-index">03</span><strong>個人模式</strong><small>本機模擬 · M1–M3 原型</small></button>
         </div>
-        <p class="home-footnote">本機模擬，不需要登入或連線即可遊玩。</p>
+        <p class="home-footnote">FIELD SYSTEM 01　/　本機模擬　/　無需登入</p>
       </div>
     </section>
     <section id="game-screen" class="screen game-screen" hidden>
@@ -52,10 +52,10 @@
           <div class="panel-section">
             <p class="panel-label">建築建造</p>
             <div class="build-grid">
-              <button class="build-button" data-build="lumberCamp">伐木場 <small>35 木 / 10 石</small></button>
-              <button class="build-button" data-build="quarry">採石場 <small>30 木 / 15 石</small></button>
-              <button class="build-button" data-build="oilWell">油井 <small>45 木 / 35 石</small></button>
-              <button class="build-button" data-build="metalMine">金屬礦場 <small>40 木 / 30 石</small></button>
+              <button class="build-button" data-build="lumberCamp">伐木場 <small>地表開採 · 35 木 / 10 石</small></button>
+              <button class="build-button" data-build="quarry">採石場 <small>地表開採 · 30 木 / 15 石</small></button>
+              <button class="build-button" data-build="oilWell">油井 <small>地表開採 · 45 木 / 35 石</small></button>
+              <button class="build-button" data-build="metalMine">金屬礦場 <small>需鄰近金屬礦 · 40 木 / 30 石</small></button>
               <button class="build-button" data-build="warehouse">倉庫 <small>65 木 / 55 石</small></button>
               <button class="build-button" data-build="factory">工廠 <small>90 木 / 90 石</small></button>
             </div>
@@ -84,7 +84,7 @@
         <div class="map-frame">
           <div class="map-heading"><span>TACTICAL MAP</span><span>48 × 32 GRID · <span id="zoom-value">100%</span></span></div>
           <canvas id="game-canvas" aria-label="Hanexo 戰場網格"></canvas>
-          <div id="game-message" class="game-message" aria-live="polite">選取單位，再以滑鼠右鍵指定目的地。資源節點以圓形標示。</div>
+          <div id="game-message" class="game-message" aria-live="polite">選取單位，再以滑鼠右鍵指定目的地。金屬礦點：M 普通金屬　/　R 稀有金屬。木材、石材與石油可直接開採。</div>
         </div>
       </div>
     </section>
