@@ -1,4 +1,4 @@
-name: Build HANEXO
+name: Build and Deploy HANEXO
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: hanexo-build-${{ github.ref }}
+  group: hanexo-pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -21,30 +21,14 @@ jobs:
     name: Test and build HANEXO
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Checkout HANEXO source
         uses: actions/checkout@v4
-
-      - name: Check whether the application is ready
-        id: app
-        shell: bash
-        run: |
-          if [ ! -f package.json ]; then
-            echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::package.json does not exist yet. Build skipped."
-            exit 0
-          fi
-          echo "ready=true" >> "$GITHUB_OUTPUT"
-
       - name: Set up Node.js
-        if: steps.app.outputs.ready == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
-
       - name: Install dependencies
-        if: steps.app.outputs.ready == 'true'
         shell: bash
         run: |
           if [ -f package-lock.json ]; then
@@ -52,29 +36,42 @@ jobs:
           else
             npm install
           fi
-
       - name: Run simulation tests
-        if: steps.app.outputs.ready == 'true'
         run: npm test
-
       - name: Build production site
-        if: steps.app.outputs.ready == 'true'
         run: npm run build
-
-      - name: Verify build output
-        if: steps.app.outputs.ready == 'true'
+      - name: Verify GitHub Pages build
         shell: bash
         run: |
           test -s dist/index.html || {
             echo "::error::Build output is missing dist/index.html."
             exit 1
           }
-
-      - name: Upload production build
-        if: steps.app.outputs.ready == 'true'
-        uses: actions/upload-artifact@v4
+          test -d dist/assets || {
+            echo "::error::Build output is missing dist/assets."
+            exit 1
+          }
+      - name: Upload GitHub Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: hanexo-dist
-          path: dist/
-          if-no-files-found: error
-          retention-days: 7
+          path: dist
+
+  deploy:
+    name: Deploy HANEXO to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
