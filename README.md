@@ -187,7 +187,7 @@ npm run build
 npm run preview
 ```
 
-Vite 建置 base 為 `/game/Hanexo/`，對應既有 GitHub Pages 路徑。
+Vite 建置 base 為 `/Hanexo/`，對應正式網址 `https://fuguangji.github.io/Hanexo/`。網站儲存庫 `fuguangji/fuguangji.github.io` 的 `Deploy HANEXO` 工作流程會定期檢查本儲存庫更新、執行測試與正式建置，並將 `dist/` 發布至網站儲存庫的 `Hanexo/` 目錄。
 
 ## 專案結構
 
