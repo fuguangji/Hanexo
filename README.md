@@ -187,7 +187,23 @@ npm run build
 npm run preview
 ```
 
-Vite 建置 base 為 `/Hanexo/`，對應正式網址 `https://fuguangji.github.io/Hanexo/`。網站儲存庫 `fuguangji/fuguangji.github.io` 的 `Deploy HANEXO` 工作流程會定期檢查本儲存庫更新、執行測試與正式建置，並將 `dist/` 發布至網站儲存庫的 `Hanexo/` 目錄。
+Vite 建置 base 固定為 `/Hanexo/`，對應正式網址：
+
+**https://fuguangji.github.io/Hanexo/**
+
+## 自動建置與部署
+
+部署由 **`fuguangji/Hanexo` 本身的 GitHub Actions** 單獨負責，不再經過個人網站儲存庫轉存建置產物。
+
+- 推送至 `main`：執行測試、建置，成功後發布 GitHub Pages。
+- Pull Request：只執行測試與建置驗證，不發布網站。
+- 手動觸發：可在 Hanexo 儲存庫的 Actions 頁面執行 `Build and Deploy HANEXO`。
+- Node.js 使用 24；有 `package-lock.json` 時使用 `npm ci`，否則使用 `npm install`。
+- 發布來源為 Vite 的 `dist/`。
+- 部署使用 GitHub Actions 的 Pages 權限與 OIDC，不需要個人 PAT。
+- 個人網站 `fuguangji.github.io` 僅管理根網站，不再輪詢、建置或部署 HANEXO。
+
+**GitHub Pages 設定要求：**請確認 Hanexo 儲存庫的 Settings → Pages → Build and deployment → Source 設為 **GitHub Actions**。若首次部署尚未啟用 Pages，先完成此設定再重新執行 workflow。
 
 ## 專案結構
 
