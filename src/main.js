@@ -16,6 +16,8 @@ const speedButtons = [...document.querySelectorAll("[data-speed]")];
 const message = document.querySelector("#game-message");
 const inspector = document.querySelector("#inspector");
 const transferSection = document.querySelector("#transfer-section");
+const inspectorPanel = document.querySelector("#inspector-panel");
+const logisticsPanel = document.querySelector("#logistics-panel");
 const transferForm = document.querySelector("#transfer-form");
 const buildHint = document.querySelector("#build-hint");
 const cancelBuildButton = document.querySelector("#cancel-build");
@@ -138,7 +140,7 @@ function frame(timestamp, session) {
   if (hudAccumulator >= 400) {
     updateHud();
     const editingInspector = inspector.contains(document.activeElement) || transferSection.contains(document.activeElement);
-    if (!editingInspector) renderInspector();
+    if (!editingInspector && inspectorPanel.open) renderInspector();
     hudAccumulator = 0;
   }
   if (world.winner && !paused) {
@@ -151,7 +153,7 @@ function frame(timestamp, session) {
 }
 
 function renderInspector() {
-  if (!world) return;
+  if (!world || !inspectorPanel.open) return;
   inspector.replaceChildren();
   transferSection.hidden = true;
   const selected = getSelectedEntities(world);
@@ -186,7 +188,7 @@ function renderInspector() {
     inspector.append($("p", "muted-copy", `${extractionLabel}：${building.blockedReason || "正常運作中。"}`));
   }
   if (building.type === "factory") renderFactoryControls(building);
-  renderTransferControls(building);
+  if (logisticsPanel.open) renderTransferControls(building);
 }
 
 function renderFactoryControls(building) {
@@ -381,6 +383,11 @@ document.querySelectorAll("[data-mode]").forEach(button => {
   });
 });
 document.querySelector("#back-home").addEventListener("click", returnHome);
+inspectorPanel.addEventListener("toggle", () => { if (inspectorPanel.open) renderInspector(); });
+logisticsPanel.addEventListener("toggle", () => { if (logisticsPanel.open) renderInspector(); });
+document.querySelectorAll(".panel-group").forEach(panel => panel.addEventListener("toggle", () => {
+  panel.classList.toggle("is-open", panel.open);
+}));
 pauseButton.addEventListener("click", () => { paused = !paused; updateControls(); });
 speedButtons.forEach(button => button.addEventListener("click", () => { speed = Number(button.dataset.speed); updateControls(); }));
 document.querySelectorAll("[data-build]").forEach(button => button.addEventListener("click", () => setBuildMode(button.dataset.build)));
