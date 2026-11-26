@@ -19,6 +19,7 @@ let lastFrame = 0;
 let accumulator = 0;
 const FIXED_STEP_MS = 100;
 let noticeTimer;
+let gameSession = 0;
 
 function showNotice(text) {
   notice.textContent = text;
@@ -28,6 +29,7 @@ function showNotice(text) {
 }
 
 function startPersonalGame() {
+  gameSession += 1;
   world = createWorld();
   renderer = createRenderer(canvas);
   paused = false;
@@ -38,12 +40,13 @@ function startPersonalGame() {
   homeScreen.hidden = true;
   gameScreen.hidden = false;
   resizeCanvas();
-  requestAnimationFrame(frame);
+  requestAnimationFrame(timestamp => frame(timestamp, gameSession));
 }
 
 function returnHome() {
   gameScreen.hidden = true;
   homeScreen.hidden = false;
+  gameSession += 1;
   world = null;
   renderer = null;
 }
@@ -82,8 +85,8 @@ function formatTime(seconds) {
   return String(Math.floor(total / 60)).padStart(2, "0") + ":" + String(total % 60).padStart(2, "0");
 }
 
-function frame(timestamp) {
-  if (!world || !renderer) return;
+function frame(timestamp, session) {
+  if (session !== gameSession || !world || !renderer) return;
   if (!lastFrame) lastFrame = timestamp;
   const delta = Math.min(timestamp - lastFrame, 250);
   lastFrame = timestamp;
@@ -102,7 +105,7 @@ function frame(timestamp) {
     message.textContent = "任務完成：敵方總指揮部已被佔領。";
     message.classList.add("success");
   }
-  requestAnimationFrame(frame);
+  requestAnimationFrame(nextTimestamp => frame(nextTimestamp, session));
 }
 
 document.querySelectorAll("[data-mode]").forEach(button => {
