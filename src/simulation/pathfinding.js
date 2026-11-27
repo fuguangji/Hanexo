@@ -87,5 +87,5 @@ function isWalkable(world, x, y, ignoreUnits, blockedGoal) {
 }
 
 function inside(world, x, y) {
-  return Number.isInteger(x) && Number.isInteger(y) && Math.abs(x) <= 1_000_000 && Math.abs(y) <= 1_000_000;
+  return Number.isInteger(x) && Number.isInteger(y) && Number.isSafeInteger(x) && Number.isSafeInteger(y);
 }
