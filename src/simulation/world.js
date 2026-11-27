@@ -92,7 +92,7 @@ function getChunk(world, cx, cy) {
 }
 
 export function getCell(world, x, y) {
-  if (!Number.isInteger(x) || !Number.isInteger(y) || Math.abs(x) > WORLD_LIMIT || Math.abs(y) > WORLD_LIMIT) {
+  if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isSafeInteger(x) || !Number.isSafeInteger(y)) {
     return { terrain: "water", blocked: true, owner: null };
   }
   const cx = Math.floor(x / CHUNK_SIZE), cy = Math.floor(y / CHUNK_SIZE);
