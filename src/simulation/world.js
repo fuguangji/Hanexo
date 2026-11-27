@@ -4,23 +4,16 @@ import {
   canFit, createInventory, hasInputs, inventoryUsed, transferDistance
 } from "./economy.js";
 
-const WIDTH = 48;
-const HEIGHT = 32;
+const CHUNK_SIZE = 32;
 const MOVE_INTERVAL = 0.18;
 const EXTRACT_RATE = 1.5;
+const WORLD_LIMIT = 1_000_000;
 
-export function createWorld() {
+export function createWorld(seed = 0x48414e45) {
   const world = {
-    width: WIDTH,
-    height: HEIGHT,
-    elapsedSeconds: 0,
-    selectedUnitIds: [],
-    selectedBuildingId: null,
-    winner: null,
-    nextEntityId: 1,
-    cells: Array.from({ length: HEIGHT }, (_, y) =>
-      Array.from({ length: WIDTH }, (_, x) => ({ terrain: terrainAt(x, y), blocked: false, owner: null }))
-    ),
+    seed: seed >>> 0, chunks: new Map(), _cellRows: new Map(),
+    elapsedSeconds: 0, selectedUnitIds: [], selectedBuildingId: null,
+    winner: null, nextEntityId: 1,
     units: [
       makeUnit("u-1", "偵察小隊", 6, 15),
       makeUnit("u-2", "防衛小隊", 6, 17),
@@ -28,24 +21,81 @@ export function createWorld() {
     ],
     structures: [
       makeBuilding("hq-player", "hq", "player", 4, 16, { wood: 300, stone: 250, commonMetal: 70, oil: 20 }),
-      makeBuilding("hq-enemy", "hq", "enemy", 43, 16, {}, "敵方總指揮部"),
-      makeBuilding("outpost-1", "outpost", "neutral", 24, 7, {}, "北部據點"),
-      makeBuilding("outpost-2", "outpost", "neutral", 24, 25, {}, "南部據點")
+      makeBuilding("hq-enemy", "hq", "enemy", 244, 16, {}, "敵方總指揮部"),
+      makeBuilding("outpost-1", "outpost", "neutral", 124, 7, {}, "北部據點"),
+      makeBuilding("outpost-2", "outpost", "neutral", 124, 25, {}, "南部據點")
     ],
-    resourceNodes: [
-      makeResourceNode("node-common-1", "commonMetal", 21, 5),
-      makeResourceNode("node-common-2", "commonMetal", 34, 13),
-      makeResourceNode("node-rare-1", "rareMetal", 34, 6),
-      makeResourceNode("node-rare-2", "rareMetal", 16, 26)
-    ],
-    transferOrders: [],
-    capturedCells: 1
+    resourceNodes: [], transferOrders: [], ownedCellKeys: new Set(), capturedCells: 1
   };
+  world.cells = new Proxy({}, {
+    get: (_, yKey) => {
+      const y = Number(yKey);
+      if (!Number.isInteger(y) || String(y) !== String(yKey)) return undefined;
+      if (!world._cellRows.has(y)) world._cellRows.set(y, new Proxy({}, {
+        get: (_, xKey) => {
+          const x = Number(xKey);
+          return Number.isInteger(x) && String(x) === String(xKey) ? getCell(world, x, y) : undefined;
+        },
+        set: (_, xKey, value) => {
+          const x = Number(xKey);
+          if (!Number.isInteger(x) || String(x) !== String(xKey)) return false;
+          Object.assign(getCell(world, x, y), value);
+          return true;
+        }
+      }));
+      return world._cellRows.get(y);
+    }
+  });
   for (const structure of world.structures) {
-    world.cells[structure.y][structure.x].blocked = true;
-    world.cells[structure.y][structure.x].owner = structure.owner;
+    const cell = getCell(world, structure.x, structure.y);
+    cell.blocked = true;
+    cell.owner = structure.owner;
+    if (structure.owner === "player") world.ownedCellKeys.add(`${structure.x},${structure.y}`);
   }
   return world;
+}
+
+function getChunk(world, cx, cy) {
+  const key = `${cx},${cy}`;
+  let chunk = world.chunks.get(key);
+  if (chunk) return chunk;
+  const cells = Array.from({ length: CHUNK_SIZE }, (_, ly) =>
+    Array.from({ length: CHUNK_SIZE }, (_, lx) => {
+      const x = cx * CHUNK_SIZE + lx, y = cy * CHUNK_SIZE + ly;
+      return { terrain: terrainAt(x, y, world.seed), blocked: false, owner: null };
+    })
+  );
+  chunk = { cells };
+  world.chunks.set(key, chunk);
+  const hash = hash2(cx, cy, world.seed ^ 0x9e3779b9);
+  const count = 1 + (hash % 3 === 0 ? 1 : 0);
+  for (let i = 0; i < count; i++) {
+    const h = hash2(cx * 7 + i * 13, cy * 11 - i * 5, world.seed ^ 0xa511e9b3);
+    let x = cx * CHUNK_SIZE + 4 + h % 24;
+    let y = cy * CHUNK_SIZE + 4 + (h >>> 8) % 24;
+    for (let attempt = 0; attempt < 12 && cells[y - cy * CHUNK_SIZE][x - cx * CHUNK_SIZE].terrain === "water"; attempt++) {
+      x = cx * CHUNK_SIZE + 4 + ((x - cx * CHUNK_SIZE + 3) % 24);
+      y = cy * CHUNK_SIZE + 4 + ((y - cy * CHUNK_SIZE + 5) % 24);
+    }
+    const type = h % 5 === 0 ? "rareMetal" : "commonMetal";
+    world.resourceNodes.push(makeResourceNode(`ore-${cx}-${cy}-${i}`, type, x, y));
+  }
+  return chunk;
+}
+
+export function getCell(world, x, y) {
+  if (!Number.isInteger(x) || !Number.isInteger(y) || Math.abs(x) > WORLD_LIMIT || Math.abs(y) > WORLD_LIMIT) {
+    return { terrain: "water", blocked: true, owner: null };
+  }
+  const cx = Math.floor(x / CHUNK_SIZE), cy = Math.floor(y / CHUNK_SIZE);
+  return getChunk(world, cx, cy).cells[y - cy * CHUNK_SIZE][x - cx * CHUNK_SIZE];
+}
+
+function hash2(x, y, seed) {
+  let h = Math.imul(x | 0, 0x45d9f3b) ^ Math.imul(y | 0, 0x119de1f3) ^ seed;
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  return (h ^ (h >>> 16)) >>> 0;
 }
 
 function makeUnit(id, name, x, y) {
@@ -67,10 +117,10 @@ function makeResourceNode(id, type, x, y) {
   return { id, type, resource: definition.resource, label: definition.label, x, y, amount: definition.amount, maxAmount: definition.amount };
 }
 
-function terrainAt(x, y) {
-  const value = (x * 17 + y * 31 + x * y * 7) % 23;
-  if (value === 0 || value === 1 || value === 2) return "rough";
-  if (value === 9) return "water";
+function terrainAt(x, y, seed) {
+  const value = hash2(x, y, seed) % 100;
+  if (value < 14) return "rough";
+  if (value < 23) return "water";
   return "plain";
 }
 
@@ -168,8 +218,10 @@ export function buildAt(world, type, x, y) {
   const id = `building-${world.nextEntityId++}`;
   const building = makeBuilding(id, type, "player", x, y, {});
   world.structures.push(building);
-  world.cells[y][x].blocked = true;
-  world.cells[y][x].owner = "player";
+  const cell = getCell(world, x, y);
+  cell.blocked = true;
+  cell.owner = "player";
+  world.ownedCellKeys.add(`${x},${y}`);
   world.selectedBuildingId = id;
   world.selectedUnitIds = [];
   return { ok: true, building };
@@ -356,16 +408,18 @@ function updateCaptures(world) {
     if (structure.type !== "outpost" || structure.owner === "player") continue;
     if (world.units.some(unit => unit.owner === "player" && Math.abs(unit.x - structure.x) + Math.abs(unit.y - structure.y) <= 1)) {
       structure.owner = "player";
-      world.cells[structure.y][structure.x].owner = "player";
+      getCell(world, structure.x, structure.y).owner = "player";
+      world.ownedCellKeys.add(`${structure.x},${structure.y}`);
     }
   }
   const enemyHQ = world.structures.find(item => item.id === "hq-enemy");
   if (enemyHQ && world.units.some(unit => unit.owner === "player" && Math.abs(unit.x - enemyHQ.x) + Math.abs(unit.y - enemyHQ.y) <= 1)) {
     enemyHQ.owner = "player";
-    world.cells[enemyHQ.y][enemyHQ.x].owner = "player";
+    getCell(world, enemyHQ.x, enemyHQ.y).owner = "player";
+    world.ownedCellKeys.add(`${enemyHQ.x},${enemyHQ.y}`);
     world.winner = "player";
   }
-  world.capturedCells = world.cells.flat().filter(cell => cell.owner === "player").length;
+  world.capturedCells = world.ownedCellKeys.size;
 }
 
 export function getWorldStats(world) {
@@ -393,8 +447,8 @@ export function getResourceNodeDefinitions() { return RESOURCE_NODE_DEFINITIONS;
 
 function isWalkable(world, x, y, ignoreUnitId) {
   if (!inside(world, x, y)) return false;
-  const cell = world.cells[y][x];
+  const cell = getCell(world, x, y);
   if (cell.terrain === "water" || cell.blocked) return false;
   return !world.units.some(unit => unit.id !== ignoreUnitId && unit.x === x && unit.y === y);
 }
-function inside(world, x, y) { return x >= 0 && y >= 0 && x < world.width && y < world.height; }
+function inside(world, x, y) { return Number.isInteger(x) && Number.isInteger(y) && Math.abs(x) <= WORLD_LIMIT && Math.abs(y) <= WORLD_LIMIT; }
