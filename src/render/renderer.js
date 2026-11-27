@@ -24,10 +24,10 @@ export function createRenderer(canvas) {
     ctx.fillRect(0, 0, width, height);
     if (!camera.initialized) centerCamera(world, width, height);
     const tile = TILE_SIZE * camera.zoom;
-    const minX = Math.max(0, Math.floor(-camera.x / tile));
-    const minY = Math.max(0, Math.floor(-camera.y / tile));
-    const maxX = Math.min(world.width, Math.ceil((width - camera.x) / tile));
-    const maxY = Math.min(world.height, Math.ceil((height - camera.y) / tile));
+    const minX = Math.floor(-camera.x / tile);
+    const minY = Math.floor(-camera.y / tile);
+    const maxX = Math.ceil((width - camera.x) / tile);
+    const maxY = Math.ceil((height - camera.y) / tile);
 
     for (let y = minY; y < maxY; y++) {
       for (let x = minX; x < maxX; x++) {
@@ -53,9 +53,19 @@ export function createRenderer(canvas) {
         ctx.strokeRect(sx, sy, tile, tile);
       }
     }
-    for (const node of world.resourceNodes) drawResourceNode(node, tile);
-    for (const structure of world.structures) drawStructure(structure, tile, world.selectedBuildingId === structure.id);
-    for (const unit of world.units) drawUnit(unit, tile, world.selectedUnitIds.includes(unit.id));
+    for (const node of world.resourceNodes) {
+      if (node.x >= minX - 1 && node.x <= maxX + 1 && node.y >= minY - 1 && node.y <= maxY + 1) drawResourceNode(node, tile);
+    }
+    for (const structure of world.structures) {
+      if (structure.x >= minX - 2 && structure.x <= maxX + 2 && structure.y >= minY - 2 && structure.y <= maxY + 2) {
+        drawStructure(structure, tile, world.selectedBuildingId === structure.id);
+      }
+    }
+    for (const unit of world.units) {
+      if (unit.x >= minX - 2 && unit.x <= maxX + 2 && unit.y >= minY - 2 && unit.y <= maxY + 2) {
+        drawUnit(unit, tile, world.selectedUnitIds.includes(unit.id));
+      }
+    }
     if (selectionRect) {
       ctx.fillStyle = "rgba(128,216,242,.12)";
       ctx.strokeStyle = COLORS.player;
@@ -66,10 +76,8 @@ export function createRenderer(canvas) {
   }
 
   function centerCamera(world, width, height) {
-    const mapWidth = world.width * TILE_SIZE;
-    const mapHeight = world.height * TILE_SIZE;
-    camera.x = (width - mapWidth) / 2;
-    camera.y = (height - mapHeight) / 2;
+    camera.x = width / 2 - 4.5 * TILE_SIZE * camera.zoom;
+    camera.y = height / 2 - 16.5 * TILE_SIZE * camera.zoom;
     camera.initialized = true;
   }
 
