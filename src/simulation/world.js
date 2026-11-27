@@ -65,7 +65,7 @@ function getChunk(world, cx, cy) {
       return { terrain: terrainAt(x, y, world.seed), blocked: false, owner: null };
     })
   );
-  chunk = { cells };
+  chunk = { cells, nodes: [] };
   world.chunks.set(key, chunk);
   const hash = hash2(cx, cy, world.seed ^ 0x9e3779b9);
   const count = 1 + (hash % 3 === 0 ? 1 : 0);
@@ -73,12 +73,20 @@ function getChunk(world, cx, cy) {
     const h = hash2(cx * 7 + i * 13, cy * 11 - i * 5, world.seed ^ 0xa511e9b3);
     let x = cx * CHUNK_SIZE + 4 + h % 24;
     let y = cy * CHUNK_SIZE + 4 + (h >>> 8) % 24;
-    for (let attempt = 0; attempt < 12 && cells[y - cy * CHUNK_SIZE][x - cx * CHUNK_SIZE].terrain === "water"; attempt++) {
-      x = cx * CHUNK_SIZE + 4 + ((x - cx * CHUNK_SIZE + 3) % 24);
-      y = cy * CHUNK_SIZE + 4 + ((y - cy * CHUNK_SIZE + 5) % 24);
+    for (let attempt = 0; attempt < 576; attempt++) {
+      const cell = cells[y - cy * CHUNK_SIZE][x - cx * CHUNK_SIZE];
+      const occupied = world.structures.some(item => item.x === x && item.y === y) ||
+        world.units.some(item => item.x === x && item.y === y) ||
+        chunk.nodes.some(item => item.x === x && item.y === y);
+      if (cell.terrain !== "water" && !occupied) break;
+      const offset = (attempt + 1) % 576;
+      x = cx * CHUNK_SIZE + 4 + (offset % 24);
+      y = cy * CHUNK_SIZE + 4 + Math.floor(offset / 24);
     }
     const type = h % 5 === 0 ? "rareMetal" : "commonMetal";
-    world.resourceNodes.push(makeResourceNode(`ore-${cx}-${cy}-${i}`, type, x, y));
+    const node = makeResourceNode(`ore-${cx}-${cy}-${i}`, type, x, y);
+    chunk.nodes.push(node);
+    world.resourceNodes.push(node);
   }
   return chunk;
 }
@@ -230,11 +238,9 @@ export function buildAt(world, type, x, y) {
 function findNearbyResourceNode(world, buildingType, x, y) {
   const extractor = BUILDING_DEFINITIONS[buildingType].extractor;
   if (extractor !== "metal") return null;
-  for (let dy = -3; dy <= 3; dy += CHUNK_SIZE) {
-    for (let dx = -3; dx <= 3; dx += CHUNK_SIZE) getCell(world, x + dx, y + dy);
+  for (const dy of [-3, 0, 3]) {
+    for (const dx of [-3, 0, 3]) getCell(world, x + dx, y + dy);
   }
-  getCell(world, x - 3, y - 3);
-  getCell(world, x + 3, y + 3);
   return world.resourceNodes
     .filter(node => ["commonMetal", "rareMetal"].includes(node.resource))
     .filter(node => Math.abs(node.x - x) + Math.abs(node.y - y) <= 3 && node.amount > 0)
