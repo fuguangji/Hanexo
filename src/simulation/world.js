@@ -466,4 +466,4 @@ function isWalkable(world, x, y, ignoreUnitId) {
   if (cell.terrain === "water" || cell.blocked) return false;
   return !world.units.some(unit => unit.id !== ignoreUnitId && unit.x === x && unit.y === y);
 }
-function inside(world, x, y) { return Number.isInteger(x) && Number.isInteger(y) && Math.abs(x) <= WORLD_LIMIT && Math.abs(y) <= WORLD_LIMIT; }
+function inside(world, x, y) { return Number.isSafeInteger(x) && Number.isSafeInteger(y); }
