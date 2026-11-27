@@ -31,28 +31,52 @@ test("single selection can select a building", () => {
   assert.equal(world.selectedBuildingId, "hq-player");
 });
 
-test("surface extractors can be placed on empty land while metal mines require one of two ore deposits", () => {
+test("surface extractors work anywhere and metal mines use generated ore deposits", () => {
   const world = createWorld();
   const result = buildAt(world, "lumberCamp", 10, 6);
   assert.equal(result.ok, true);
   advanceWorld(world, 3);
   assert.ok(result.building.inventory.wood >= 1);
   assert.equal(world.structures.find(item => item.id === "hq-player").inventory.wood, 265);
-  const mineWithoutDeposit = buildAt(world, "metalMine", 12, 12);
-  assert.equal(mineWithoutDeposit.ok, false);
-  const mineNearCommonOre = buildAt(world, "metalMine", 20, 5);
-  assert.equal(mineNearCommonOre.ok, true);
-  advanceWorld(world, 3);
-  assert.ok(mineNearCommonOre.building.inventory.commonMetal >= 1);
 
-  const mineNearRareOre = buildAt(world, "metalMine", 33, 6);
-  assert.equal(mineNearRareOre.ok, true);
+  for (let cy = -2; cy <= 2; cy++) {
+    for (let cx = -2; cx <= 4; cx++) getCell(world, cx * 32 + 16, cy * 32 + 16);
+  }
+  const findMineSpot = node => {
+    for (let radius = 1; radius <= 3; radius++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        for (let dy = -radius; dy <= radius; dy++) {
+          if (Math.abs(dx) + Math.abs(dy) !== radius) continue;
+          const x = node.x + dx, y = node.y + dy;
+          const cell = getCell(world, x, y);
+          const occupied = world.units.some(unit => unit.x === x && unit.y === y) ||
+            world.structures.some(building => building.x === x && building.y === y) ||
+            world.resourceNodes.some(item => item.x === x && item.y === y);
+          if (cell.terrain !== "water" && !cell.blocked && !occupied) return { x, y };
+        }
+      }
+    }
+    return null;
+  };
+  const commonNode = world.resourceNodes.find(node => node.resource === "commonMetal");
+  const rareNode = world.resourceNodes.find(node => node.resource === "rareMetal");
+  assert.ok(commonNode);
+  assert.ok(rareNode);
+  const commonSpot = findMineSpot(commonNode);
+  const rareSpot = findMineSpot(rareNode);
+  assert.ok(commonSpot);
+  assert.ok(rareSpot);
+  const commonMine = buildAt(world, "metalMine", commonSpot.x, commonSpot.y);
+  const rareMine = buildAt(world, "metalMine", rareSpot.x, rareSpot.y);
+  assert.equal(commonMine.ok, true);
+  assert.equal(rareMine.ok, true);
   const quarry = buildAt(world, "quarry", 12, 8);
   const oilWell = buildAt(world, "oilWell", 14, 8);
   assert.equal(quarry.ok, true);
   assert.equal(oilWell.ok, true);
   advanceWorld(world, 3);
-  assert.ok(mineNearRareOre.building.inventory.rareMetal >= 1);
+  assert.ok(commonMine.building.inventory.commonMetal >= 1);
+  assert.ok(rareMine.building.inventory.rareMetal >= 1);
   assert.ok(quarry.building.inventory.stone >= 1);
   assert.ok(oilWell.building.inventory.oil >= 1);
 });
