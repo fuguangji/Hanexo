@@ -7,7 +7,6 @@ import {
 const CHUNK_SIZE = 32;
 const MOVE_INTERVAL = 0.18;
 const EXTRACT_RATE = 1.5;
-const WORLD_LIMIT = 1_000_000;
 
 export function createWorld(seed = 0x48414e45) {
   const world = {
@@ -238,10 +237,15 @@ export function buildAt(world, type, x, y) {
 function findNearbyResourceNode(world, buildingType, x, y) {
   const extractor = BUILDING_DEFINITIONS[buildingType].extractor;
   if (extractor !== "metal") return null;
-  for (const dy of [-3, 0, 3]) {
-    for (const dx of [-3, 0, 3]) getCell(world, x + dx, y + dy);
+  const minChunkX = Math.floor((x - 3) / CHUNK_SIZE);
+  const maxChunkX = Math.floor((x + 3) / CHUNK_SIZE);
+  const minChunkY = Math.floor((y - 3) / CHUNK_SIZE);
+  const maxChunkY = Math.floor((y + 3) / CHUNK_SIZE);
+  const nearbyNodes = [];
+  for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+    for (let cx = minChunkX; cx <= maxChunkX; cx++) nearbyNodes.push(...getChunk(world, cx, cy).nodes);
   }
-  return world.resourceNodes
+  return nearbyNodes
     .filter(node => ["commonMetal", "rareMetal"].includes(node.resource))
     .filter(node => Math.abs(node.x - x) + Math.abs(node.y - y) <= 3 && node.amount > 0)
     .sort((a, b) => Math.abs(a.x - x) + Math.abs(a.y - y) - Math.abs(b.x - x) - Math.abs(b.y - y))[0] || null;
