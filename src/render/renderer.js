@@ -53,9 +53,13 @@ export function createRenderer(canvas) {
         ctx.strokeRect(sx, sy, tile, tile);
       }
     }
-    for (const chunk of world.chunks.values()) {
-      for (const node of chunk.nodes) {
-        if (node.x >= minX - 1 && node.x <= maxX + 1 && node.y >= minY - 1 && node.y <= maxY + 1) drawResourceNode(node, tile);
+    const minChunkX = Math.floor((minX - 1) / 32), maxChunkX = Math.floor((maxX + 1) / 32);
+    const minChunkY = Math.floor((minY - 1) / 32), maxChunkY = Math.floor((maxY + 1) / 32);
+    for (let cy = minChunkY; cy <= maxChunkY; cy++) {
+      for (let cx = minChunkX; cx <= maxChunkX; cx++) {
+        const chunk = world.chunks.get(`${cx},${cy}`);
+        if (!chunk) continue;
+        for (const node of chunk.nodes) drawResourceNode(node, tile);
       }
     }
     for (const structure of world.structures) {
