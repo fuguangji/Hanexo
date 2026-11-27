@@ -230,6 +230,11 @@ export function buildAt(world, type, x, y) {
 function findNearbyResourceNode(world, buildingType, x, y) {
   const extractor = BUILDING_DEFINITIONS[buildingType].extractor;
   if (extractor !== "metal") return null;
+  for (let dy = -3; dy <= 3; dy += CHUNK_SIZE) {
+    for (let dx = -3; dx <= 3; dx += CHUNK_SIZE) getCell(world, x + dx, y + dy);
+  }
+  getCell(world, x - 3, y - 3);
+  getCell(world, x + 3, y + 3);
   return world.resourceNodes
     .filter(node => ["commonMetal", "rareMetal"].includes(node.resource))
     .filter(node => Math.abs(node.x - x) + Math.abs(node.y - y) <= 3 && node.amount > 0)
