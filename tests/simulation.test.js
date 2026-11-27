@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createWorld, advanceWorld, issueMove, selectAt, selectUnitsInRect, buildAt, addProductionJob, createTransferOrder } from "../src/simulation/world.js";
 import { findPath } from "../src/simulation/pathfinding.js";
+import { getCell } from "../src/simulation/world.js";
 
 test("A* routes around blocked terrain and returns adjacent steps", () => {
   const world = createWorld();
@@ -90,4 +91,27 @@ test("production capacity allocation cannot exceed 100 percent", () => {
   assert.equal(addProductionJob(world, factory.id, "steel").ok, true);
   assert.equal(addProductionJob(world, factory.id, "arrows").ok, true);
   assert.equal(factory.jobs.reduce((sum, job) => sum + job.allocation, 0), 50);
+});
+
+
+test("infinite world lazily generates deterministic chunks in negative and positive coordinates", () => {
+  const first = createWorld(123456);
+  const second = createWorld(123456);
+  assert.equal(first.width, undefined);
+  assert.equal(first.height, undefined);
+  assert.equal(first.chunks.size, 1);
+  const farCell = getCell(first, -97, 65);
+  const sameCell = getCell(second, -97, 65);
+  assert.equal(farCell.terrain, sameCell.terrain);
+  assert.equal(first.chunks.size, 2);
+  assert.equal(getCell(first, -97, 65), farCell);
+  assert.ok(["plain", "rough", "water"].includes(farCell.terrain));
+});
+
+test("world coordinates are not clamped to the old 48 by 32 map", () => {
+  const world = createWorld(98765);
+  const cell = getCell(world, 80, -55);
+  assert.ok(cell);
+  assert.ok(["plain", "rough", "water"].includes(cell.terrain));
+  assert.equal(world.cells[-55][80], cell);
 });
