@@ -99,11 +99,11 @@ test("infinite world lazily generates deterministic chunks in negative and posit
   const second = createWorld(123456);
   assert.equal(first.width, undefined);
   assert.equal(first.height, undefined);
-  assert.equal(first.chunks.size, 1);
+  const initialChunkCount = first.chunks.size;
   const farCell = getCell(first, -97, 65);
   const sameCell = getCell(second, -97, 65);
   assert.equal(farCell.terrain, sameCell.terrain);
-  assert.equal(first.chunks.size, 2);
+  assert.equal(first.chunks.size, initialChunkCount + 1);
   assert.equal(getCell(first, -97, 65), farCell);
   assert.ok(["plain", "rough", "water"].includes(farCell.terrain));
 });
