@@ -35,6 +35,7 @@ let noticeTimer;
 let gameSession = 0;
 let buildMode = null;
 let pointerAction = null;
+const activePointers = new Map();
 
 const $ = (tag, className, text) => {
   const element = document.createElement(tag);
@@ -364,6 +365,26 @@ function handleMapSelection(event, draggedRect) {
 
 function onPointerDown(event) {
   if (!world || paused) return;
+  if (event.pointerType === "touch") {
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    canvas.setPointerCapture(event.pointerId);
+    if (activePointers.size >= 2) {
+      const points = [...activePointers.values()];
+      pointerAction = {
+        type: "pinch",
+        lastDistance: Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y),
+        lastMidpoint: { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 }
+      };
+      renderer.clearSelectionRect();
+    } else {
+      pointerAction = {
+        type: "touch", startX: event.clientX, startY: event.clientY,
+        lastX: event.clientX, lastY: event.clientY, moved: false
+      };
+    }
+    event.preventDefault();
+    return;
+  }
   if (event.button === 1) {
     pointerAction = { type: "pan", lastX: event.clientX, lastY: event.clientY };
     canvas.setPointerCapture(event.pointerId);
@@ -377,6 +398,25 @@ function onPointerDown(event) {
 
 function onPointerMove(event) {
   if (!pointerAction || !renderer) return;
+  if (event.pointerType === "touch" && activePointers.has(event.pointerId)) {
+    activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (pointerAction.type === "pinch" && activePointers.size >= 2) {
+      const points = [...activePointers.values()];
+      const distance = Math.max(1, Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y));
+      const midpoint = { x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 };
+      renderer.panBy(midpoint.x - pointerAction.lastMidpoint.x, midpoint.y - pointerAction.lastMidpoint.y);
+      renderer.zoomAt(midpoint.x, midpoint.y, distance / Math.max(1, pointerAction.lastDistance));
+      pointerAction.lastDistance = distance;
+      pointerAction.lastMidpoint = midpoint;
+    } else if (pointerAction.type === "touch") {
+      const distance = Math.hypot(event.clientX - pointerAction.startX, event.clientY - pointerAction.startY);
+      pointerAction.moved = pointerAction.moved || distance > 5;
+      if (pointerAction.moved) renderer.panBy(event.clientX - pointerAction.lastX, event.clientY - pointerAction.lastY);
+      pointerAction.lastX = event.clientX;
+      pointerAction.lastY = event.clientY;
+    }
+    return;
+  }
   if (pointerAction.type === "pan") {
     renderer.panBy(event.clientX - pointerAction.lastX, event.clientY - pointerAction.lastY);
     pointerAction.lastX = event.clientX;
@@ -398,6 +438,22 @@ function onPointerMove(event) {
 }
 
 function onPointerUp(event) {
+  if (event.pointerType === "touch") {
+    const action = pointerAction;
+    activePointers.delete(event.pointerId);
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (action?.type === "pinch") {
+      const remaining = [...activePointers.entries()][0];
+      pointerAction = remaining ? {
+        type: "touch", startX: remaining[1].x, startY: remaining[1].y,
+        lastX: remaining[1].x, lastY: remaining[1].y, moved: true
+      } : null;
+    } else {
+      pointerAction = null;
+      if (action?.type === "touch" && !action.moved) handleMapSelection(event, null);
+    }
+    return;
+  }
   if (!pointerAction) return;
   const action = pointerAction;
   pointerAction = null;
@@ -413,7 +469,6 @@ function onPointerUp(event) {
   }
   if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
 }
-
 function onContextMenu(event) {
   event.preventDefault();
   if (!world || paused || world.winner || buildMode || !world.selectedUnitIds.length) return;
@@ -450,7 +505,11 @@ cancelBuildButton.addEventListener("click", () => { buildMode = null; updateCont
 canvas.addEventListener("pointerdown", onPointerDown);
 canvas.addEventListener("pointermove", onPointerMove);
 canvas.addEventListener("pointerup", onPointerUp);
-canvas.addEventListener("pointercancel", () => { pointerAction = null; renderer?.clearSelectionRect(); });
+canvas.addEventListener("pointercancel", event => {
+  activePointers.delete(event.pointerId);
+  pointerAction = null;
+  renderer?.clearSelectionRect();
+});
 canvas.addEventListener("contextmenu", onContextMenu);
 canvas.addEventListener("wheel", onWheel, { passive: false });
 window.addEventListener("keydown", event => {
