@@ -70,8 +70,10 @@ test("surface extractors work anywhere and metal mines use generated ore deposit
   const rareMine = buildAt(world, "metalMine", rareSpot.x, rareSpot.y);
   assert.equal(commonMine.ok, true);
   assert.equal(rareMine.ok, true);
-  const quarry = buildAt(world, "quarry", 12, 8);
-  const oilWell = buildAt(world, "oilWell", 14, 8);
+  const quarrySpot = findMineSpot(commonNode);
+  const oilSpot = findMineSpot(rareNode);
+  const quarry = buildAt(world, "quarry", quarrySpot.x, quarrySpot.y);
+  const oilWell = buildAt(world, "oilWell", oilSpot.x, oilSpot.y);
   assert.equal(quarry.ok, true);
   assert.equal(oilWell.ok, true);
   advanceWorld(world, 3);
