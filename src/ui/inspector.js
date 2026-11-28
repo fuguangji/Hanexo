@@ -1,10 +1,10 @@
 import {
-  addProductionJob, removeProductionJob, adjustProductionAllocation, createTransferOrder,
-  getSelectedEntities, getRecipeDefinitions, getResourceDefinitions
+  addProductionJob, removeProductionJob, adjustProductionAllocation, createTransferOrder, setBuildingOutput,
+  getSelectedEntities, getRecipeDefinitions, getResourceDefinitions, getBuildingDefinitions
 } from "../simulation/world.js";
+import { buildingAccepts } from "../simulation/economy.js";
 import { el, formatAmount, inventoryTotal } from "./dom.js";
 
-const EXTRACTORS = ["lumberCamp", "quarry", "oilWell", "metalMine"];
 
 /**
  * 檢視器與調撥表單。每次更新先算「簽章」，內容沒變就完全不動 DOM，
@@ -33,7 +33,7 @@ export function createInspector({ root, transferSection, transferForm, hint, get
   function refreshInspector(world, selected, force) {
     const signature = JSON.stringify(selected.units.length
       ? selected.units.map(unit => [unit.id, unit.hp, unit.state])
-      : selected.building ? [selected.building.id, selected.building.inventory, selected.building.reservedIncoming, selected.building.blockedReason,
+      : selected.building ? [selected.building.id, selected.building.inventory, selected.building.reservedIncoming, selected.building.blockedReason, selected.building.output, Math.round(selected.building.load * 100), world.power.satisfaction.toFixed(2),
         selected.building.jobs.map(job => [job.recipeId, job.allocation, job.state, Math.floor(job.progress * 4)])] : null);
     if (!force && signature === inspectorSignature) return;
     inspectorSignature = signature;
@@ -81,11 +81,49 @@ export function createInspector({ root, transferSection, transferForm, hint, get
     } else {
       root.append(el("p", "muted-copy", "目前沒有庫存。"));
     }
-    if (EXTRACTORS.includes(building.type)) {
-      const label = building.type === "metalMine" ? "礦點採集" : "地表開採";
-      root.append(el("p", building.blockedReason ? "status-line warn" : "status-line", `${label}：${building.blockedReason || "正常運作中。"}`));
+    renderBuildingRole(world, building);
+    if (building.recipes.length) renderFactory(building);
+  }
+
+  function renderBuildingRole(world, building) {
+    const definition = getBuildingDefinitions()[building.type];
+    const resources = getResourceDefinitions();
+    const extractor = definition.extractor;
+    if (extractor) {
+      root.append(el("p", "sub-label", extractor.kind === "deposit" ? "礦點採集" : "地表開採"));
+      const select = el("select", "field-control");
+      select.setAttribute("aria-label", "開採資源");
+      for (const [resource, rate] of Object.entries(extractor.outputs)) {
+        const option = el("option", "", `${resources[resource].label}（速率 ${rate}×）`);
+        option.value = resource;
+        option.selected = resource === building.output;
+        select.append(option);
+      }
+      select.addEventListener("change", () => {
+        const result = setBuildingOutput(getWorld(), building.id, select.value);
+        if (!result.ok) notify(result.reason);
+        onWorldChange();
+        refresh(true);
+      });
+      root.append(select);
+      if (extractor.inputs) root.append(el("p", "muted-copy", `每產出 1 單位消耗：${Object.entries(extractor.inputs).map(([r, n]) => `${resources[r].label} ${n}`).join("、")}`));
     }
-    if (building.type === "factory") renderFactory(building);
+    if (definition.generator) {
+      const { output, fuel } = definition.generator;
+      root.append(el("p", "sub-label", "發電"));
+      root.append(el("p", "muted-copy", `額定 ${output}　負載 ${Math.round(building.load * 100)}%　燃料：${resources[fuel].label}`));
+    } else if (definition.power) {
+      root.append(el("p", "muted-copy", `用電 ${definition.power}　電網滿足率 ${Math.round(world.power.satisfaction * 100)}%`));
+    }
+    if (definition.station) {
+      const { ammo, range, optionalAmmo } = definition.station;
+      root.append(el("p", "sub-label", "攻擊站"));
+      root.append(el("p", "muted-copy", `射程 ${range} 格　${optionalAmmo ? "可選補給" : "彈藥"}：${ammo.map(r => resources[r].label).join("、")}`));
+      root.append(el("p", "muted-copy", "戰鬥系統（M5）完成後才會實際造成傷害。"));
+    }
+    if (definition.note && !definition.station) root.append(el("p", "muted-copy", definition.note));
+    if (building.blockedReason) root.append(el("p", "status-line warn", building.blockedReason));
+    else if (extractor || definition.generator || definition.station) root.append(el("p", "status-line", definition.station ? "就緒" : "正常運作中。"));
   }
 
   function renderFactory(building) {
@@ -117,7 +155,7 @@ export function createInspector({ root, transferSection, transferForm, hint, get
     }
     const select = el("select", "field-control");
     select.setAttribute("aria-label", "新增配方");
-    for (const recipe of Object.values(recipes)) {
+    for (const recipe of building.recipes.map(id => recipes[id])) {
       if (building.jobs.some(job => job.recipeId === recipe.id)) continue;
       const option = el("option", "", recipe.label);
       option.value = recipe.id;
@@ -163,20 +201,31 @@ export function createInspector({ root, transferSection, transferForm, hint, get
     }
     const what = el("select", "field-control");
     what.id = "transfer-resource";
-    for (const resource of available) {
-      const option = el("option", "", `${resources[resource]?.label || resource}（${Math.floor(source.inventory[resource])}）`);
-      option.value = resource;
-      what.append(option);
-    }
     const amount = el("input", "field-control");
     amount.id = "transfer-amount";
     amount.type = "number"; amount.min = "1"; amount.step = "1"; amount.inputMode = "numeric";
-    const setDefault = () => { amount.value = what.value ? String(Math.min(10, Math.floor(source.inventory[what.value] || 1))) : "1"; };
-    what.addEventListener("change", setDefault);
-    setDefault();
     const submit = el("button", "small-button full-width", "建立運輸訂單");
     submit.type = "button";
-    submit.disabled = !available.length;
+    const note = el("p", "muted-copy", "");
+
+    // 只列出目的地會接收的資源。
+    const fillResources = () => {
+      const destination = destinations.find(item => item.id === to.value);
+      const usable = available.filter(resource => destination && buildingAccepts(destination.type, resource));
+      what.replaceChildren();
+      for (const resource of usable) {
+        const option = el("option", "", `${resources[resource]?.label || resource}（${Math.floor(source.inventory[resource])}）`);
+        option.value = resource;
+        what.append(option);
+      }
+      submit.disabled = !usable.length;
+      note.textContent = usable.length ? "物資會先從來源扣除，抵達後才加入目的地庫存。" : `${destination?.label || "目的地"}不接收來源庫存中的任何資源。`;
+      amount.value = usable.length ? String(Math.min(10, Math.floor(source.inventory[what.value] || 1))) : "1";
+    };
+    to.addEventListener("change", fillResources);
+    what.addEventListener("change", () => { amount.value = String(Math.min(10, Math.floor(source.inventory[what.value] || 1))); });
+    fillResources();
+
     submit.addEventListener("click", () => {
       const result = createTransferOrder(getWorld(), source.id, to.value, what.value, amount.value);
       notify(result.ok ? "物資已裝載，運輸途中。" : result.reason);
@@ -184,10 +233,7 @@ export function createInspector({ root, transferSection, transferForm, hint, get
       refresh(true);
     });
     const label = (text, forId) => { const l = el("label", "field-label", text); l.htmlFor = forId; return l; };
-    transferForm.append(
-      label("目的地", "transfer-to"), to, label("資源", "transfer-resource"), what, label("數量", "transfer-amount"), amount,
-      submit, el("p", "muted-copy", "物資會先從來源扣除，抵達後才加入目的地庫存。")
-    );
+    transferForm.append(label("目的地", "transfer-to"), to, label("資源", "transfer-resource"), what, label("數量", "transfer-amount"), amount, submit, note);
   }
 
   return { refresh };

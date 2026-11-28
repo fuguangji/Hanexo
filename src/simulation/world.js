@@ -1,7 +1,7 @@
 import { findPath } from "./pathfinding.js";
 import {
   BUILDING_DEFINITIONS, RECIPES, RESOURCE_DEFINITIONS, RESOURCE_NODE_DEFINITIONS,
-  canFit, createInventory, hasInputs, inventoryUsed, transferDistance
+  buildingAccepts, canFit, createInventory, hasInputs, inventoryUsed, transferDistance
 } from "./economy.js";
 
 const WIDTH = 48;
@@ -27,7 +27,7 @@ export function createWorld() {
       makeUnit("u-3", "機動小隊", 8, 16)
     ],
     structures: [
-      makeBuilding("hq-player", "hq", "player", 4, 16, { wood: 300, stone: 250, commonMetal: 70, oil: 20 }),
+      makeBuilding("hq-player", "hq", "player", 4, 16, { wood: 300, stone: 250, iron: 70, copper: 20, oil: 20 }),
       makeBuilding("hq-enemy", "hq", "enemy", 43, 16, {}, "敵方總指揮部"),
       makeBuilding("outpost-1", "outpost", "neutral", 24, 7, {}, "北部據點"),
       makeBuilding("outpost-2", "outpost", "neutral", 24, 25, {}, "南部據點")
@@ -39,6 +39,7 @@ export function createWorld() {
       makeResourceNode("node-rare-2", "rareMetal", 16, 26)
     ],
     transferOrders: [],
+    power: { capacity: 0, demand: 0, satisfaction: 1 },
     capturedCells: 0
   };
   for (const structure of world.structures) {
@@ -66,14 +67,15 @@ function makeBuilding(id, type, owner, x, y, inventory = {}, customLabel = null)
   return {
     id, type, owner, x, y, label: customLabel || definition.label || type,
     inventory: createInventory(inventory), capacity: definition.capacity || 1000,
-    reservedIncoming: 0, jobs: [], productionCapacity: definition.productionCapacity || 0,
-    extractProgress: 0, level: 1, quality: 1, blockedReason: null, node: null
+    reservedIncoming: 0, jobs: [], recipes: definition.recipes || [], productionCapacity: definition.productionCapacity || 0,
+    output: definition.extractor ? Object.keys(definition.extractor.outputs)[0] : null,
+    load: 0, extractProgress: 0, level: 1, quality: 1, blockedReason: null, node: null
   };
 }
 
 function makeResourceNode(id, type, x, y) {
   const definition = RESOURCE_NODE_DEFINITIONS[type];
-  return { id, type, resource: definition.resource, label: definition.label, x, y, amount: definition.amount, maxAmount: definition.amount };
+  return { id, type, label: definition.label, x, y, amount: definition.amount, maxAmount: definition.amount };
 }
 
 function terrainAt(x, y) {
@@ -170,8 +172,9 @@ export function checkBuild(world, type, x, y) {
     return { ok: false, reason: "該位置無法建造。" };
   }
   if (world.units.some(unit => unit.x === x && unit.y === y)) return { ok: false, reason: "請先移開該位置的單位。" };
-  if (type === "metalMine" && !findNearbyResourceNode(world, type, x, y)) {
-    return { ok: false, reason: "金屬礦場必須建在普通金屬礦或稀有金屬礦附近（3 格內）。" };
+  const extractor = definition.extractor;
+  if (extractor?.kind === "deposit" && !findNearbyDeposit(world, extractor.deposit, x, y)) {
+    return { ok: false, reason: `${definition.label}必須建在${RESOURCE_NODE_DEFINITIONS[extractor.deposit].label}附近（3 格內）。` };
   }
   const hq = world.structures.find(item => item.id === "hq-player");
   if (!hq) return { ok: false, reason: "找不到總部。" };
@@ -196,19 +199,27 @@ export function buildAt(world, type, x, y) {
   return { ok: true, building };
 }
 
-function findNearbyResourceNode(world, buildingType, x, y) {
-  const extractor = BUILDING_DEFINITIONS[buildingType].extractor;
-  if (extractor !== "metal") return null;
+function findNearbyDeposit(world, deposit, x, y) {
   return world.resourceNodes
-    .filter(node => ["commonMetal", "rareMetal"].includes(node.resource))
-    .filter(node => Math.abs(node.x - x) + Math.abs(node.y - y) <= 3 && node.amount > 0)
+    .filter(node => node.type === deposit && node.amount > 0 && Math.abs(node.x - x) + Math.abs(node.y - y) <= 3)
     .sort((a, b) => Math.abs(a.x - x) + Math.abs(a.y - y) - Math.abs(b.x - x) - Math.abs(b.y - y))[0] || null;
 }
 
+/** 選擇礦井／煉礦場要開採的資源。 */
+export function setBuildingOutput(world, buildingId, resource) {
+  const building = world.structures.find(item => item.id === buildingId && item.owner === "player");
+  const outputs = building && BUILDING_DEFINITIONS[building.type].extractor?.outputs;
+  if (!outputs || !(resource in outputs)) return { ok: false, reason: "此建築無法開採該資源。" };
+  building.output = resource;
+  building.extractProgress = 0;
+  return { ok: true };
+}
+
 export function addProductionJob(world, buildingId, recipeId) {
-  const building = world.structures.find(item => item.id === buildingId && item.owner === "player" && item.type === "factory");
+  const building = world.structures.find(item => item.id === buildingId && item.owner === "player" && item.recipes.length > 0);
   const recipe = RECIPES[recipeId];
   if (!building || !recipe) return { ok: false, reason: "找不到工廠或配方。" };
+  if (!building.recipes.includes(recipeId)) return { ok: false, reason: `${building.label}無法生產${recipe.label}。` };
   if (building.jobs.some(job => job.recipeId === recipeId)) return { ok: false, reason: "此配方已在生產排程中。" };
   const allocated = building.jobs.reduce((sum, job) => sum + job.allocation, 0);
   if (allocated >= 100) return { ok: false, reason: "產能已全部分配，請先調整其他產品。" };
@@ -239,6 +250,7 @@ export function createTransferOrder(world, fromId, toId, resource, amount) {
   if (!from || !to || from === to || !RESOURCE_DEFINITIONS[resource] || !Number.isFinite(quantity) || quantity <= 0) {
     return { ok: false, reason: "調撥資料不正確。" };
   }
+  if (!buildingAccepts(to.type, resource)) return { ok: false, reason: `${to.label}不接收${RESOURCE_DEFINITIONS[resource].label}。` };
   if ((from.inventory[resource] || 0) < quantity) return { ok: false, reason: "來源庫存不足。" };
   if (!canFit(to, { [resource]: quantity })) return { ok: false, reason: "目的地庫存空間不足。" };
   from.inventory[resource] -= quantity;
@@ -255,8 +267,10 @@ export function advanceWorld(world, dt) {
   if (!Number.isFinite(dt) || dt <= 0) return;
   world.elapsedSeconds += dt;
   advanceUnits(world, dt);
+  advancePower(world, dt);
   advanceExtraction(world, dt);
   advanceProduction(world, dt);
+  advanceStations(world);
   advanceTransfers(world, dt);
   updateCaptures(world);
 }
@@ -292,45 +306,116 @@ function advanceUnits(world, dt) {
 }
 
 // 沿用上一次的礦點；耗盡時才重新搜尋最近的礦點。
-function resolveNode(world, building) {
+function resolveNode(world, building, deposit) {
   if (building.node && building.node.amount > 0) return building.node;
-  building.node = findNearbyResourceNode(world, building.type, building.x, building.y);
+  building.node = findNearbyDeposit(world, deposit, building.x, building.y);
   return building.node;
 }
 
+// ---------- 電網：單一全域電網 ----------
+// 發電廠燃燒自身庫存的燃料；耗電建築依「供電 / 需求」比例運轉。
+function powerDemand(world, building, definition) {
+  if (!definition?.power || building.owner !== "player") return 0;
+  const extractor = definition.extractor;
+  if (extractor) {
+    if (extractor.kind === "deposit" && !resolveNode(world, building, extractor.deposit)) return 0;
+    if (inventoryUsed(building.inventory) >= building.capacity) return 0;
+    if (extractor.inputs && !hasInputs(building.inventory, extractor.inputs)) return 0;
+    return definition.power;
+  }
+  const active = building.jobs.some(job => job.allocation > 0 && job.state !== "缺少原料" && job.state !== "庫存空間不足");
+  return active ? definition.power : 0;
+}
+
+function advancePower(world, dt) {
+  let capacity = 0;
+  let demand = 0;
+  const running = [];
+  for (const building of world.structures) {
+    if (building.owner !== "player") continue;
+    const definition = BUILDING_DEFINITIONS[building.type];
+    const generator = definition?.generator;
+    if (generator) {
+      const need = generator.rate * dt;
+      if ((building.inventory[generator.fuel] || 0) + 1e-9 >= need) {
+        capacity += generator.output;
+        running.push({ building, generator, need });
+        building.blockedReason = null;
+      } else {
+        building.load = 0;
+        building.blockedReason = `缺少燃料（${RESOURCE_DEFINITIONS[generator.fuel].label}）`;
+      }
+    }
+    demand += powerDemand(world, building, definition);
+  }
+  const load = capacity > 0 ? Math.min(1, demand / capacity) : 0;
+  for (const { building, generator, need } of running) {
+    building.inventory[generator.fuel] = Math.max(0, building.inventory[generator.fuel] - need * load);
+    building.load = load;
+  }
+  world.power = { capacity, demand, satisfaction: demand <= 0 ? 1 : Math.min(1, capacity / demand) };
+}
+
 function advanceExtraction(world, dt) {
+  const satisfaction = world.power.satisfaction;
   for (const building of world.structures) {
     const definition = BUILDING_DEFINITIONS[building.type];
-    if (!definition?.extractor) continue;
-    building.extractProgress += dt * EXTRACT_RATE;
-    while (building.extractProgress >= 1) {
-      const extractor = definition.extractor;
-      const node = extractor === "metal" ? (building.node = resolveNode(world, building)) : null;
-      const resource = extractor === "metal" ? node?.resource : extractor;
-      if (!resource || !canFit(building, { [resource]: 1 })) {
-        building.extractProgress = Math.min(building.extractProgress, 0.999);
-        break;
+    const extractor = definition?.extractor;
+    if (!extractor || building.owner !== "player") continue;
+    const resource = building.output;
+    const node = extractor.kind === "deposit" ? (building.node = resolveNode(world, building, extractor.deposit)) : null;
+    const powered = definition.power ? satisfaction : 1;
+    let reason = null;
+    if (extractor.kind === "deposit" && !node) reason = "附近礦點已耗盡或不存在";
+    else if (inventoryUsed(building.inventory) >= building.capacity) reason = "庫存已滿";
+    else if (extractor.inputs && !hasInputs(building.inventory, extractor.inputs)) {
+      reason = `缺少${Object.keys(extractor.inputs).map(item => RESOURCE_DEFINITIONS[item].label).join("、")}`;
+    } else if (powered <= 1e-9) reason = "電力不足";
+
+    if (!reason) {
+      building.extractProgress += dt * EXTRACT_RATE * (extractor.outputs[resource] ?? 1) * powered;
+      while (building.extractProgress >= 1) {
+        const unitInputs = extractor.inputs || {};
+        if (!canFit(building, { [resource]: 1 - Object.values(unitInputs).reduce((a, b) => a + b, 0) }) || !hasInputs(building.inventory, unitInputs)) {
+          building.extractProgress = Math.min(building.extractProgress, 0.999);
+          break;
+        }
+        for (const [input, amount] of Object.entries(unitInputs)) building.inventory[input] -= amount;
+        if (node) node.amount = Math.max(0, node.amount - 1);
+        building.inventory[resource] = (building.inventory[resource] || 0) + 1;
+        building.extractProgress -= 1;
       }
-      if (node) node.amount = Math.max(0, node.amount - 1);
-      building.inventory[resource] = (building.inventory[resource] || 0) + 1;
-      building.extractProgress -= 1;
     }
-    if (definition.extractor === "metal" && !resolveNode(world, building)) building.blockedReason = "附近金屬礦點已耗盡或不存在";
-    else if (inventoryUsed(building.inventory) >= building.capacity) building.blockedReason = "庫存已滿";
-    else building.blockedReason = null;
+    building.blockedReason = reason;
+  }
+}
+
+// 攻擊站：彈藥就緒狀態。傷害與射擊在戰鬥系統（M5）實作後接上。
+function advanceStations(world) {
+  for (const building of world.structures) {
+    const station = BUILDING_DEFINITIONS[building.type]?.station;
+    if (!station || building.owner !== "player") continue;
+    const stock = station.ammo.reduce((sum, resource) => sum + (building.inventory[resource] || 0), 0);
+    building.ready = station.optionalAmmo || stock >= 1;
+    building.blockedReason = building.ready ? null : (station.aircraft ? "沒有停放飛機" : "缺少彈藥");
   }
 }
 
 function advanceProduction(world, dt) {
   for (const building of world.structures) {
-    if (building.type !== "factory") continue;
+    if (!building.recipes.length || building.owner !== "player") continue;
+    const powerNeeded = BUILDING_DEFINITIONS[building.type].power > 0;
     for (const job of building.jobs) {
       const recipe = RECIPES[job.recipeId];
       if (!recipe || job.allocation <= 0) {
         job.state = "paused";
         continue;
       }
-      const work = dt * building.productionCapacity * (job.allocation / 100) * building.quality;
+      if (powerNeeded && world.power.satisfaction <= 1e-9) {
+        job.state = "電力不足";
+        continue;
+      }
+      const work = dt * building.productionCapacity * (job.allocation / 100) * building.quality * (powerNeeded ? world.power.satisfaction : 1);
       job.progress = Math.min(recipe.duration, job.progress + work);
       if (job.progress + 1e-9 < recipe.duration) {
         job.state = "working";
@@ -404,7 +489,8 @@ export function getWorldStats(world) {
     playerUnits: world.units.filter(unit => unit.owner === "player").length,
     capturedCells: world.capturedCells,
     buildings: world.structures.filter(item => item.owner === "player").length,
-    hqInventory: hq?.inventory || {}
+    hqInventory: hq?.inventory || {},
+    power: world.power
   };
 }
 

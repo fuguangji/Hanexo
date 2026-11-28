@@ -176,6 +176,7 @@ export function createRenderer(canvas) {
         : structure.owner === "enemy" ? PALETTE.enemy : PALETTE.neutral;
       drawStructure(ctx, structure, geometryOf(structure.x, structure.y), ownerColor, world.selectedBuildingId === structure.id, quality);
     }
+    drawStationRange(world, tile);
     const selected = new Set(world.selectedUnitIds);
     for (const unit of world.units) {
       if (visible(unit.x, unit.y)) drawUnit(unit, tile, selected.has(unit.id));
@@ -205,6 +206,22 @@ export function createRenderer(canvas) {
     ctx.stroke();
   }
 
+  // 選取攻擊站時顯示射程環。
+  function drawStationRange(world, tile) {
+    const building = world.structures.find(item => item.id === world.selectedBuildingId);
+    const station = building && BUILDING_DEFINITIONS[building.type]?.station;
+    if (!station) return;
+    ctx.beginPath();
+    ctx.arc(camera.x + (building.x + 0.5) * tile, camera.y + (building.y + 0.5) * tile, station.range * tile, 0, Math.PI * 2);
+    ctx.fillStyle = building.ready ? "rgba(238, 106, 44, .08)" : "rgba(160, 160, 160, .06)";
+    ctx.fill();
+    ctx.setLineDash([tile * 0.25, tile * 0.18]);
+    ctx.strokeStyle = building.ready ? "rgba(238, 130, 70, .75)" : "rgba(170, 170, 170, .5)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
   function drawCellOutline(x, y, tile, color) {
     ctx.strokeStyle = color;
     ctx.lineWidth = 2;
@@ -216,7 +233,7 @@ export function createRenderer(canvas) {
     ctx.fillStyle = valid ? "rgba(143, 227, 160, .28)" : "rgba(214, 90, 70, .32)";
     ctx.fillRect(camera.x + x * tile, camera.y + y * tile, tile, tile);
     drawCellOutline(x, y, tile, valid ? "#8fe3a0" : "#e0624a");
-    if (type === "metalMine") {
+    if (BUILDING_DEFINITIONS[type]?.extractor?.kind === "deposit") {
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = "rgba(226, 181, 58, .55)";
       ctx.lineWidth = 1;

@@ -5,6 +5,8 @@ import {
 import { createRenderer } from "./render/renderer.js";
 import { createInputController } from "./input/controller.js";
 import { createInspector } from "./ui/inspector.js";
+import { createBuildMenu } from "./ui/build-menu.js";
+import { BUILDING_ORDER } from "./simulation/economy.js";
 import { createSettingsDialog } from "./ui/settings-dialog.js";
 import { el, formatAmount, formatTime } from "./ui/dom.js";
 import { buildAccountUrl, connectAccount, describeAccount } from "./account/account.js";
@@ -105,6 +107,10 @@ function say(text, success = false) {
   message.textContent = text;
   message.classList.toggle("success", success);
 }
+
+// ---------- 建造選單 ----------
+const buildMenu = createBuildMenu({ root: $("#build-menu"), onSelect: type => setBuildMode(type) });
+$("#build-panel > summary small").textContent = `${BUILDING_ORDER.length} 種建築`;
 
 // ---------- 檢視器 ----------
 const inspector = createInspector({
@@ -295,10 +301,7 @@ function updateControls() {
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
   });
-  document.querySelectorAll("[data-build]").forEach(button => {
-    button.classList.toggle("active", button.dataset.build === buildMode);
-    button.setAttribute("aria-pressed", String(button.dataset.build === buildMode));
-  });
+  buildMenu.refresh(world ? (getHQ(world)?.inventory || {}) : {}, buildMode);
   $("#cancel-build").hidden = !buildMode;
   $("#build-hint").textContent = buildMode
     ? `建造模式：${getBuildingDefinitions()[buildMode].label}。點擊地圖空地放置，按 Esc 取消。`
@@ -324,12 +327,18 @@ function updateHud(force = false) {
   updateZoomReadout();
 
   const entries = Object.entries(stats.hqInventory).filter(([, amount]) => amount > 0.001);
-  const signature = entries.map(([key, amount]) => `${key}:${formatAmount(amount)}`).join("|");
+  const { capacity, demand, satisfaction } = stats.power;
+  const signature = entries.map(([key, amount]) => `${key}:${formatAmount(amount)}`).join("|") + `|P${capacity}/${demand}/${satisfaction.toFixed(2)}`;
+  buildMenu.refresh(stats.hqInventory, buildMode);
   if (!force && signature === resourceSignature) return;
   resourceSignature = signature;
   const strip = $("#resource-strip");
   strip.replaceChildren();
   const definitions = getResourceDefinitions();
+  const power = el("div", `resource-chip power-chip ${demand <= 0 ? "idle" : satisfaction >= 0.999 ? "ok" : satisfaction > 0 ? "low" : "out"}`);
+  power.title = "電網：供電容量 / 用電需求";
+  power.append(el("i", "led"), el("span", "", "電力"), el("strong", "", `${formatAmount(Math.min(capacity, demand))}/${formatAmount(capacity)}`));
+  strip.append(power);
   for (const [resource, amount] of entries) {
     const chip = el("div", "resource-chip");
     const swatch = el("i", "swatch");
@@ -337,7 +346,7 @@ function updateHud(force = false) {
     chip.append(swatch, el("span", "", definitions[resource]?.label || resource), el("strong", "", formatAmount(amount)));
     strip.append(chip);
   }
-  if (!entries.length) strip.append(el("span", "muted-copy", "總部沒有庫存"));
+
 }
 
 // ---------- 行動版抽屜 ----------
@@ -361,7 +370,6 @@ document.querySelectorAll("[data-open-settings]").forEach(button => button.addEv
 $("#back-home").addEventListener("click", returnHome);
 pauseButton.addEventListener("click", () => { paused = !paused; updateControls(); });
 document.querySelectorAll("[data-speed]").forEach(button => button.addEventListener("click", () => { speed = Number(button.dataset.speed); updateControls(); }));
-document.querySelectorAll("[data-build]").forEach(button => button.addEventListener("click", () => setBuildMode(button.dataset.build)));
 $("#cancel-build").addEventListener("click", () => setBuildMode(null));
 moveModeButton.addEventListener("click", () => {
   moveMode = !moveMode;
