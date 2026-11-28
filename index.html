@@ -2,120 +2,183 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#07131d" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1c2220" />
   <meta name="description" content="HANEXO — 2D 即時戰略與工業模擬遊戲。" />
-  <title>HANEXO — Real-time Strategy</title>
+  <title>HANEXO — 工業即時戰略</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Noto+Sans+TC:wght@400;500;700&display=swap" />
   <link rel="stylesheet" href="./main.css" />
 </head>
 <body>
   <main class="app-shell">
     <header class="topbar">
-      <a class="brand" href="./"><span class="brand-mark">H</span><span>HANEXO</span></a>
-      <div class="topbar-meta"><span class="status-dot"></span><span>LOCAL SIMULATION</span><span id="version-label" class="version">M1–M3</span><button id="account-button" class="account-button" type="button" aria-label="前往共用帳號中心">確認帳號中…</button></div>
+      <a class="brand" href="./" aria-label="HANEXO 首頁"><span class="brand-mark" aria-hidden="true">H</span><span class="brand-name">HANEXO</span></a>
+      <div class="topbar-tools">
+        <span class="led-tag"><i class="led on" aria-hidden="true"></i>本機模擬</span>
+        <button type="button" class="tool-button" data-open-settings aria-haspopup="dialog">畫質設定</button>
+        <button id="account-button" class="tool-button account-button" type="button" aria-label="前往共用帳號中心" disabled>確認帳號中…</button>
+      </div>
     </header>
+
     <section id="home-screen" class="screen home-screen">
-      <div class="hero-section">
-        <p class="eyebrow">REAL-TIME STRATEGY · INDUSTRIAL SIMULATION</p>
+      <div class="nameplate plate">
         <h1>HANEXO</h1>
-        <p class="hero-copy">鋼鐵、燃料、產線與補給。<br />從一座前進基地，建立完整的工業戰區。</p>
+        <p class="hero-copy">鋼鐵、燃料、產線與補給。從一座前進基地，建立完整的工業戰區。</p>
         <div class="mode-grid">
-          <button class="mode-card" data-mode="server"><span class="mode-index">01</span><strong>公服模式</strong><small>官方世界 · 尚未開放</small></button>
-          <button class="mode-card" data-mode="private"><span class="mode-index">02</span><strong>私人聯機</strong><small>房主模擬 · 尚未開放</small></button>
-          <button class="mode-card primary" data-mode="personal"><span class="mode-index">03</span><strong>個人模式</strong><small>本機模擬 · M1–M3 原型</small></button>
+          <button type="button" class="mode-card is-off" data-mode="server"><span class="led" aria-hidden="true"></span><strong>公服模式</strong><small>官方世界・尚未開放</small></button>
+          <button type="button" class="mode-card is-off" data-mode="private"><span class="led" aria-hidden="true"></span><strong>私人聯機</strong><small>房主模擬・尚未開放</small></button>
+          <button type="button" class="mode-card is-on" data-mode="personal"><span class="led on" aria-hidden="true"></span><strong>個人模式</strong><small>本機模擬・可立即開始</small></button>
         </div>
-        <p class="home-footnote">FIELD SYSTEM 01　/　本機模擬　/　訪客可遊玩 · 登入可連結帳號</p>
+        <p class="home-footnote">訪客可直接遊玩；登入共用帳號後會連結身分。畫質可在右上角「畫質設定」調整。</p>
       </div>
     </section>
+
     <section id="game-screen" class="screen game-screen" hidden>
-      <div class="game-toolbar">
-        <button id="back-home" class="ghost-button">← 主選單</button>
+      <div class="game-toolbar plate">
+        <button id="back-home" type="button" class="small-button">← 主選單</button>
         <div class="game-title"><strong>FRONTIER / 01</strong><span>建立工業體系，佔領敵方總指揮部</span></div>
         <div class="time-controls">
-          <span id="clock-state" class="clock-state">運行中</span>
-          <button id="pause-button" class="small-button">暫停</button>
-          <button class="small-button speed-button active" data-speed="1">1×</button>
-          <button class="small-button speed-button" data-speed="2">2×</button>
-          <button class="small-button speed-button" data-speed="4">4×</button>
+          <span class="lcd" id="strip-time" aria-label="模擬時間">00:00</span>
+          <span id="clock-state" class="clock-state" data-state="running" role="status">運行中</span>
+          <button id="pause-button" type="button" class="small-button" aria-pressed="false">暫停</button>
+          <div class="speed-group" role="group" aria-label="模擬速度">
+            <button type="button" class="small-button speed-button active" data-speed="1" aria-pressed="true">1×</button>
+            <button type="button" class="small-button speed-button" data-speed="2" aria-pressed="false">2×</button>
+            <button type="button" class="small-button speed-button" data-speed="4" aria-pressed="false">4×</button>
+          </div>
         </div>
       </div>
+
       <div class="game-layout">
-        <aside class="side-panel">
-          <details class="panel-group">
-            <summary><span>戰場概況</span><small>STATUS / RESOURCE</small></summary>
-                      <div class="panel-section">
-                        <p class="panel-label">戰場狀態</p>
-                        <div class="stat-row"><span>模擬時間</span><strong id="time-value">00:00</strong></div>
-                        <div class="stat-row"><span>我方單位</span><strong id="unit-value">3</strong></div>
-                        <div class="stat-row"><span>建築數量</span><strong id="building-value">1</strong></div>
-                        <div class="stat-row"><span>控制區域</span><strong id="territory-value">1</strong></div>
-                        <p class="sub-label">總部資源</p><div id="hq-resource-list" class="hq-resource-list"></div>
-                      </div>
-          </details>
-          <details class="panel-group">
-            <summary><span>建置管理</span><small>CONSTRUCTION</small></summary>
-                      <div class="panel-section">
-                        <p class="panel-label">建築建造</p>
-                        <div class="build-grid">
-                          <button class="build-button" data-build="lumberCamp">伐木場 <small>地表開採 · 35 木 / 10 石</small></button>
-                          <button class="build-button" data-build="quarry">採石場 <small>地表開採 · 30 木 / 15 石</small></button>
-                          <button class="build-button" data-build="oilWell">油井 <small>地表開採 · 45 木 / 35 石</small></button>
-                          <button class="build-button" data-build="metalMine">金屬礦場 <small>需鄰近金屬礦 · 40 木 / 30 石</small></button>
-                          <button class="build-button" data-build="warehouse">倉庫 <small>65 木 / 55 石</small></button>
-                          <button class="build-button" data-build="factory">工廠 <small>90 木 / 90 石</small></button>
-                        </div>
-                        <p id="build-hint" class="help-line">選擇建築後，在地圖上點擊放置。</p>
-                        <button id="cancel-build" class="small-button full-width" hidden>取消建造（Esc）</button>
-                      </div>
-          </details>
-          <details class="panel-group" id="inspector-panel">
-            <summary><span>單位與建築資訊</span><small>INSPECTOR / PRODUCTION</small></summary>
-                      <div class="panel-section inspector-section">
-                        <p class="panel-label">選取資訊</p>
-                        <div id="inspector"><p class="muted-copy">選取單位或建築以查看資訊。</p></div>
-                      </div>
-          </details>
-          <details class="panel-group" id="logistics-panel">
-            <summary><span>物流與物資調撥</span><small>LOGISTICS</small></summary>
-                      <div class="panel-section transfer-section" id="transfer-section" hidden>
-                        <p class="panel-label">手動物資調撥</p>
-                        <div id="transfer-form"></div>
-                      </div>
-          </details>
-          <details class="panel-group">
-            <summary><span>建築升級</span><small>UPGRADES / 尚未開放</small></summary>
-            <div class="panel-section"><p class="muted-copy">建築等級與品質數值已存在於模擬資料；升級介面及升級規則尚未實作。</p></div>
-          </details>
-          <details class="panel-group">
-            <summary><span>科技樹</span><small>RESEARCH / 尚未開放</small></summary>
-            <div class="panel-section"><p class="muted-copy">科技樹目前尚未實作。此區將獨立管理科技解鎖、研究進度與前置條件。</p></div>
-          </details>
-          <details class="panel-group">
-            <summary><span>操作說明</span><small>CONTROLS</small></summary>
-                      <div class="panel-section">
-                        <p class="panel-label">操作說明</p>
-                        <p class="help-line"><kbd>左鍵</kbd> 選取／框選單位</p>
-                        <p class="help-line"><kbd>Shift</kbd> 加選單位</p>
-                        <p class="help-line"><kbd>右鍵</kbd> 群體移動</p>
-                        <p class="help-line"><kbd>中鍵拖曳</kbd> 移動鏡頭</p>
-                        <p class="help-line"><kbd>滾輪</kbd> 縮放地圖</p>
-                        <p class="help-line"><kbd>空白鍵</kbd> 暫停／繼續</p>
-                      </div>
-          </details>
-          <details class="panel-group">
-            <summary><span>任務目標</span><small>OBJECTIVE</small></summary>
-                      <div class="objective-card"><span class="objective-kicker">PRIMARY OBJECTIVE</span><strong>佔領敵方總指揮部</strong><p>將至少一支我方單位移動至敵方指揮部周圍，即可完成佔領。</p></div>
-          </details>
+        <aside id="side-panel" class="side-panel" data-open="false" aria-label="控制面板">
+          <button id="panel-toggle" type="button" class="drawer-handle" aria-expanded="false" aria-controls="panel-scroll">
+            <span class="grip" aria-hidden="true"></span><span class="drawer-label">控制面板</span><span id="inspector-hint" class="drawer-hint">未選取</span>
+          </button>
+          <div id="panel-scroll" class="panel-scroll">
+            <details class="panel-group">
+              <summary><span>戰場概況</span><small>狀態與任務</small></summary>
+              <div class="panel-section">
+                <div class="stat-row"><span>模擬時間</span><strong id="time-value" class="lcd">00:00</strong></div>
+                <div class="stat-row"><span>我方單位</span><strong id="unit-value" class="lcd">3</strong></div>
+                <div class="stat-row"><span>建築數量</span><strong id="building-value" class="lcd">1</strong></div>
+                <div class="stat-row"><span>控制區域</span><strong id="territory-value" class="lcd">1</strong></div>
+                <div class="objective-card"><strong>主要目標：佔領敵方總指揮部</strong><p>將至少一支我方單位移動到敵方指揮部旁邊，即可完成佔領。</p></div>
+              </div>
+            </details>
+            <details class="panel-group" id="build-panel">
+              <summary><span>建置管理</span><small>建造建築</small></summary>
+              <div class="panel-section">
+                <div class="build-grid">
+                  <button type="button" class="build-button" data-build="lumberCamp" aria-pressed="false">伐木場<small>地表開採 · 35 木 / 10 石</small></button>
+                  <button type="button" class="build-button" data-build="quarry" aria-pressed="false">採石場<small>地表開採 · 30 木 / 15 石</small></button>
+                  <button type="button" class="build-button" data-build="oilWell" aria-pressed="false">油井<small>地表開採 · 45 木 / 35 石</small></button>
+                  <button type="button" class="build-button" data-build="metalMine" aria-pressed="false">金屬礦場<small>需鄰近金屬礦 · 40 木 / 30 石</small></button>
+                  <button type="button" class="build-button" data-build="warehouse" aria-pressed="false">倉庫<small>65 木 / 55 石</small></button>
+                  <button type="button" class="build-button" data-build="factory" aria-pressed="false">工廠<small>90 木 / 90 石</small></button>
+                </div>
+                <p id="build-hint" class="help-line">選擇建築後，在地圖上點擊放置。</p>
+                <button id="cancel-build" type="button" class="small-button full-width" hidden>取消建造（Esc）</button>
+              </div>
+            </details>
+            <details class="panel-group" id="inspector-panel">
+              <summary><span>單位與建築資訊</span><small>檢視與生產排程</small></summary>
+              <div class="panel-section inspector-section"><div id="inspector"><p class="muted-copy">選取單位或建築以查看資訊。</p></div></div>
+            </details>
+            <details class="panel-group" id="logistics-panel">
+              <summary><span>物流與物資調撥</span><small>手動運輸</small></summary>
+              <div class="panel-section transfer-section">
+                <div id="transfer-section" hidden><div id="transfer-form"></div></div>
+                <p class="muted-copy" id="transfer-empty">選取一座我方建築，並至少再有一座建築，才能建立調撥訂單。</p>
+              </div>
+            </details>
+            <details class="panel-group">
+              <summary><span>建築升級</span><small>尚未開放</small></summary>
+              <div class="panel-section"><p class="muted-copy">建築等級與品質數值已存在於模擬資料；升級介面及升級規則尚未實作。</p></div>
+            </details>
+            <details class="panel-group">
+              <summary><span>科技樹</span><small>尚未開放</small></summary>
+              <div class="panel-section"><p class="muted-copy">科技樹目前尚未實作。此區將獨立管理科技解鎖、研究進度與前置條件。</p></div>
+            </details>
+            <details class="panel-group">
+              <summary><span>操作說明</span><small>滑鼠・鍵盤・觸控</small></summary>
+              <div class="panel-section">
+                <p class="help-line"><kbd>左鍵</kbd> 選取／框選單位</p>
+                <p class="help-line"><kbd>Shift</kbd> 加選單位　<kbd>Ctrl+A</kbd> 全選</p>
+                <p class="help-line"><kbd>右鍵</kbd> 群體移動</p>
+                <p class="help-line"><kbd>中鍵拖曳</kbd> 移動鏡頭</p>
+                <p class="help-line"><kbd>滾輪</kbd> 縮放地圖</p>
+                <p class="help-line"><kbd>WASD</kbd> / <kbd>方向鍵</kbd> 移動鏡頭　<kbd>H</kbd> 回總部</p>
+                <p class="help-line"><kbd>空白鍵</kbd> 暫停／繼續　<kbd>Esc</kbd> 取消</p>
+                <p class="help-line"><kbd>觸控</kbd> 輕點選取、拖曳平移、雙指縮放、長按移動</p>
+              </div>
+            </details>
+          </div>
         </aside>
-        <div class="map-frame">
-          <div class="map-heading"><span>TACTICAL MAP</span><span>48 × 32 GRID · <span id="zoom-value">100%</span></span></div>
-          <canvas id="game-canvas" aria-label="Hanexo 戰場網格"></canvas>
-          <div id="game-message" class="game-message" aria-live="polite">選取單位，再以滑鼠右鍵指定目的地。金屬礦點：M 普通金屬　/　R 稀有金屬。木材、石材與石油可直接開採。</div>
+
+        <div class="map-frame plate">
+          <div id="resource-strip" class="resource-strip" role="list" aria-label="總部資源"></div>
+          <div class="map-stage">
+            <canvas id="game-canvas" aria-label="Hanexo 戰場網格" tabindex="0"></canvas>
+            <div class="map-tools" role="group" aria-label="地圖工具">
+              <button id="move-mode" type="button" class="map-tool wide" aria-pressed="false" title="點擊地圖即移動已選單位">移動</button>
+              <button id="zoom-in" type="button" class="map-tool" aria-label="放大">＋</button>
+              <button id="zoom-out" type="button" class="map-tool" aria-label="縮小">－</button>
+              <button id="view-fit" type="button" class="map-tool" aria-label="顯示整張地圖" title="顯示整張地圖">▣</button>
+              <button id="view-hq" type="button" class="map-tool" aria-label="回到總部" title="回到總部（H）">⌖</button>
+            </div>
+            <div class="map-readout"><span>48 × 32</span><span id="zoom-value">100%</span><span id="fps-readout" hidden>0 FPS</span></div>
+          </div>
+          <div id="game-message" class="game-message" aria-live="polite"></div>
         </div>
       </div>
     </section>
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
   </main>
+
+  <dialog id="settings-dialog" class="settings-dialog plate" aria-labelledby="settings-title">
+    <header class="dialog-head">
+      <h2 id="settings-title">畫質設定</h2>
+      <span class="lcd" id="settings-current">自動</span>
+    </header>
+    <div class="dialog-body">
+      <div class="setting-block">
+        <p class="setting-title">畫質等級</p>
+        <div class="preset-group" role="group" aria-label="畫質等級">
+          <button type="button" class="small-button" data-preset="auto" aria-pressed="false">自動</button>
+          <button type="button" class="small-button" data-preset="low" aria-pressed="false">低</button>
+          <button type="button" class="small-button" data-preset="medium" aria-pressed="false">中</button>
+          <button type="button" class="small-button" data-preset="high" aria-pressed="false">高</button>
+          <button type="button" class="small-button" data-preset="ultra" aria-pressed="false">極致</button>
+        </div>
+        <p class="setting-note">自動會依裝置性能起始，遊戲中幀率持續偏低時自動降一級；同一次遊玩不會自動調高。</p>
+      </div>
+      <div class="setting-block">
+        <label class="setting-title" for="opt-resolution">渲染解析度 <output id="opt-resolution-value">100%</output></label>
+        <input id="opt-resolution" class="range" type="range" min="0.5" max="1" step="0.05" />
+        <label class="setting-title" for="opt-fps">幀率上限</label>
+        <select id="opt-fps" class="field-control">
+          <option value="30">30 FPS（省電）</option>
+          <option value="60">60 FPS</option>
+          <option value="0">跟隨螢幕更新率</option>
+        </select>
+      </div>
+      <div class="setting-block">
+        <p class="setting-title">畫面效果</p>
+        <label class="switch"><input type="checkbox" data-key="shadows" /><span class="switch-track" aria-hidden="true"></span><span class="switch-text">建築陰影</span></label>
+        <label class="switch"><input type="checkbox" data-key="terrainTexture" /><span class="switch-track" aria-hidden="true"></span><span class="switch-text">地形紋理</span></label>
+        <label class="switch"><input type="checkbox" data-key="details" /><span class="switch-track" aria-hidden="true"></span><span class="switch-text">建築與礦點細節</span></label>
+        <label class="switch"><input type="checkbox" data-key="paths" /><span class="switch-track" aria-hidden="true"></span><span class="switch-text">顯示選取單位的路徑</span></label>
+        <label class="switch"><input type="checkbox" data-key="showFps" /><span class="switch-track" aria-hidden="true"></span><span class="switch-text">在地圖上顯示 FPS</span></label>
+      </div>
+      <p id="settings-live" class="live-readout" aria-live="off"></p>
+    </div>
+    <footer class="dialog-foot">
+      <button id="settings-reset" type="button" class="small-button">還原預設</button>
+      <button id="settings-close" type="button" class="small-button primary">完成</button>
+    </footer>
+  </dialog>
   <script type="module" src="./src/main.js"></script>
 </body>
 </html>

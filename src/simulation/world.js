@@ -39,13 +39,22 @@ export function createWorld() {
       makeResourceNode("node-rare-2", "rareMetal", 16, 26)
     ],
     transferOrders: [],
-    capturedCells: 1
+    capturedCells: 0
   };
   for (const structure of world.structures) {
     world.cells[structure.y][structure.x].blocked = true;
-    world.cells[structure.y][structure.x].owner = structure.owner;
+    setCellOwner(world, structure.x, structure.y, structure.owner);
   }
   return world;
+}
+
+// 玩家控制格數隨所有權變動即時維護，不必每個模擬步長掃描整張地圖。
+function setCellOwner(world, x, y, owner) {
+  const cell = world.cells[y][x];
+  if (cell.owner === owner) return;
+  if (cell.owner === "player") world.capturedCells -= 1;
+  if (owner === "player") world.capturedCells += 1;
+  cell.owner = owner;
 }
 
 function makeUnit(id, name, x, y) {
@@ -58,7 +67,7 @@ function makeBuilding(id, type, owner, x, y, inventory = {}, customLabel = null)
     id, type, owner, x, y, label: customLabel || definition.label || type,
     inventory: createInventory(inventory), capacity: definition.capacity || 1000,
     reservedIncoming: 0, jobs: [], productionCapacity: definition.productionCapacity || 0,
-    extractProgress: 0, level: 1, quality: 1, blockedReason: null
+    extractProgress: 0, level: 1, quality: 1, blockedReason: null, node: null
   };
 }
 
@@ -115,8 +124,9 @@ export function issueMove(world, unitIds, x, y) {
   const units = world.units.filter(unit => unitIds.includes(unit.id));
   if (!units.length || !inside(world, x, y) || !isWalkable(world, x, y, null)) return false;
   let assigned = 0;
-  for (const [index, unit] of units.entries()) {
-    const target = findFormationSlot(world, x, y, index, unit.id);
+  const claimed = new Set();
+  for (const unit of units) {
+    const target = findFormationSlot(world, x, y, unit.id, claimed);
     if (!target) continue;
     const path = findPath(world, unit, target);
     if (path.length || (unit.x === target.x && unit.y === target.y)) {
@@ -129,7 +139,7 @@ export function issueMove(world, unitIds, x, y) {
   return assigned > 0;
 }
 
-function findFormationSlot(world, x, y, index, unitId) {
+function findFormationSlot(world, x, y, unitId, claimed) {
   const offsets = [{ x: 0, y: 0 }];
   for (let radius = 1; radius <= 5; radius++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -139,10 +149,11 @@ function findFormationSlot(world, x, y, index, unitId) {
       offsets.push({ x: -radius, y: dy }, { x: radius, y: dy });
     }
   }
-  for (const offset of offsets.slice(index, index + 80)) {
+  for (const offset of offsets) {
     const target = { x: x + offset.x, y: y + offset.y };
-    if (!isWalkable(world, target.x, target.y, unitId)) continue;
-    if (world.units.some(unit => unit.id !== unitId && unit.x === target.x && unit.y === target.y)) continue;
+    const key = target.y * world.width + target.x;
+    if (claimed.has(key) || !isWalkable(world, target.x, target.y, unitId)) continue;
+    claimed.add(key);
     return target;
   }
   return null;
@@ -152,24 +163,34 @@ export function setBuildingPlacement(world, type) {
   return Boolean(BUILDING_DEFINITIONS[type] && type !== "hq");
 }
 
-export function buildAt(world, type, x, y) {
+export function checkBuild(world, type, x, y) {
   const definition = BUILDING_DEFINITIONS[type];
   if (!definition || type === "hq" || !inside(world, x, y)) return { ok: false, reason: "無效的建築類型或位置。" };
   if (!isWalkable(world, x, y, null) || world.resourceNodes.some(node => node.x === x && node.y === y)) {
     return { ok: false, reason: "該位置無法建造。" };
   }
   if (world.units.some(unit => unit.x === x && unit.y === y)) return { ok: false, reason: "請先移開該位置的單位。" };
-  const hq = world.structures.find(item => item.id === "hq-player");
-  if (!hq || !hasInputs(hq.inventory, definition.cost)) return { ok: false, reason: "總部庫存不足。" };
   if (type === "metalMine" && !findNearbyResourceNode(world, type, x, y)) {
     return { ok: false, reason: "金屬礦場必須建在普通金屬礦或稀有金屬礦附近（3 格內）。" };
   }
-  for (const [resource, amount] of Object.entries(definition.cost)) hq.inventory[resource] -= amount;
+  const hq = world.structures.find(item => item.id === "hq-player");
+  if (!hq) return { ok: false, reason: "找不到總部。" };
+  const missing = Object.entries(definition.cost)
+    .filter(([resource, amount]) => (hq.inventory[resource] || 0) < amount)
+    .map(([resource, amount]) => `${RESOURCE_DEFINITIONS[resource]?.label || resource} ${Math.ceil(amount - (hq.inventory[resource] || 0))}`);
+  if (missing.length) return { ok: false, reason: `總部庫存不足，缺少：${missing.join("、")}。` };
+  return { ok: true, hq, definition };
+}
+
+export function buildAt(world, type, x, y) {
+  const check = checkBuild(world, type, x, y);
+  if (!check.ok) return check;
+  for (const [resource, amount] of Object.entries(check.definition.cost)) check.hq.inventory[resource] -= amount;
   const id = `building-${world.nextEntityId++}`;
   const building = makeBuilding(id, type, "player", x, y, {});
   world.structures.push(building);
   world.cells[y][x].blocked = true;
-  world.cells[y][x].owner = "player";
+  setCellOwner(world, x, y, "player");
   world.selectedBuildingId = id;
   world.selectedUnitIds = [];
   return { ok: true, building };
@@ -270,6 +291,13 @@ function advanceUnits(world, dt) {
   }
 }
 
+// 沿用上一次的礦點；耗盡時才重新搜尋最近的礦點。
+function resolveNode(world, building) {
+  if (building.node && building.node.amount > 0) return building.node;
+  building.node = findNearbyResourceNode(world, building.type, building.x, building.y);
+  return building.node;
+}
+
 function advanceExtraction(world, dt) {
   for (const building of world.structures) {
     const definition = BUILDING_DEFINITIONS[building.type];
@@ -277,7 +305,7 @@ function advanceExtraction(world, dt) {
     building.extractProgress += dt * EXTRACT_RATE;
     while (building.extractProgress >= 1) {
       const extractor = definition.extractor;
-      const node = extractor === "metal" ? findNearbyResourceNode(world, building.type, building.x, building.y) : null;
+      const node = extractor === "metal" ? (building.node = resolveNode(world, building)) : null;
       const resource = extractor === "metal" ? node?.resource : extractor;
       if (!resource || !canFit(building, { [resource]: 1 })) {
         building.extractProgress = Math.min(building.extractProgress, 0.999);
@@ -287,7 +315,7 @@ function advanceExtraction(world, dt) {
       building.inventory[resource] = (building.inventory[resource] || 0) + 1;
       building.extractProgress -= 1;
     }
-    if (definition.extractor === "metal" && !findNearbyResourceNode(world, building.type, building.x, building.y)) building.blockedReason = "附近金屬礦點已耗盡或不存在";
+    if (definition.extractor === "metal" && !resolveNode(world, building)) building.blockedReason = "附近金屬礦點已耗盡或不存在";
     else if (inventoryUsed(building.inventory) >= building.capacity) building.blockedReason = "庫存已滿";
     else building.blockedReason = null;
   }
@@ -348,7 +376,9 @@ function advanceTransfers(world, dt) {
     destination.inventory[order.resource] = (destination.inventory[order.resource] || 0) + order.amount;
     order.state = "完成";
   }
-  world.transferOrders = world.transferOrders.filter(order => order.state === "moving");
+  if (world.transferOrders.some(order => order.state !== "moving")) {
+    world.transferOrders = world.transferOrders.filter(order => order.state === "moving");
+  }
 }
 
 function updateCaptures(world) {
@@ -356,16 +386,15 @@ function updateCaptures(world) {
     if (structure.type !== "outpost" || structure.owner === "player") continue;
     if (world.units.some(unit => unit.owner === "player" && Math.abs(unit.x - structure.x) + Math.abs(unit.y - structure.y) <= 1)) {
       structure.owner = "player";
-      world.cells[structure.y][structure.x].owner = "player";
+      setCellOwner(world, structure.x, structure.y, "player");
     }
   }
   const enemyHQ = world.structures.find(item => item.id === "hq-enemy");
   if (enemyHQ && world.units.some(unit => unit.owner === "player" && Math.abs(unit.x - enemyHQ.x) + Math.abs(unit.y - enemyHQ.y) <= 1)) {
     enemyHQ.owner = "player";
-    world.cells[enemyHQ.y][enemyHQ.x].owner = "player";
+    setCellOwner(world, enemyHQ.x, enemyHQ.y, "player");
     world.winner = "player";
   }
-  world.capturedCells = world.cells.flat().filter(cell => cell.owner === "player").length;
 }
 
 export function getWorldStats(world) {
@@ -386,6 +415,7 @@ export function getSelectedEntities(world) {
   };
 }
 
+export function getHQ(world) { return world.structures.find(item => item.id === "hq-player") || null; }
 export function getBuildingDefinitions() { return BUILDING_DEFINITIONS; }
 export function getRecipeDefinitions() { return RECIPES; }
 export function getResourceDefinitions() { return RESOURCE_DEFINITIONS; }

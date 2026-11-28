@@ -1,241 +1,231 @@
 import { BUILDING_DEFINITIONS, RESOURCE_NODE_DEFINITIONS } from "../simulation/economy.js";
+import { PALETTE, drawStructure, drawResourceNode } from "./sprites.js";
 
 const TILE_SIZE = 28;
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 2.5;
+const EDGE_MARGIN = 96; // 平移時至少留這麼多像素的地圖在畫面內
 const COLORS = {
-  background: "#10171b", grid: "rgba(185, 194, 193, 0.13)",
-  plain: "#293238", rough: "#353b3d", water: "#1b3440",
-  player: "#e5b45f", enemy: "#c86f5b", neutral: "#a8a49a", text: "#e8e5dc"
+  background: "#101614", grid: "rgba(190, 200, 192, 0.12)",
+  plain: "#2b3431", rough: "#363d39", water: "#1b3438"
 };
+const DEFAULT_QUALITY = { maxPixelRatio: 1, resolution: 1, shadows: true, terrainTexture: false, paths: true, details: true };
 
 export function createRenderer(canvas) {
   const ctx = canvas.getContext("2d");
   let pixelRatio = 1;
-  let camera = { x: 0, y: 0, zoom: 1, initialized: false };
+  let cssWidth = 0;
+  let cssHeight = 0;
+  let quality = { ...DEFAULT_QUALITY };
+  const camera = { x: 0, y: 0, zoom: 1, initialized: false };
   let selectionRect = null;
+  let hoverCell = null;
+  let buildPreview = null;
+  let terrainCache = null;
+  let terrainKey = "";
+  let dirty = true;
 
-  function setPixelRatio(value) { pixelRatio = value; }
+  const invalidate = () => { dirty = true; };
+  const consumeDirty = () => { const was = dirty; dirty = false; return was; };
 
-  function draw(world) {
-    const width = canvas.width / pixelRatio;
-    const height = canvas.height / pixelRatio;
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = COLORS.background;
-    ctx.fillRect(0, 0, width, height);
-    if (!camera.initialized) centerCamera(world, width, height);
-    const tile = TILE_SIZE * camera.zoom;
-    const minX = Math.max(0, Math.floor(-camera.x / tile));
-    const minY = Math.max(0, Math.floor(-camera.y / tile));
-    const maxX = Math.min(world.width, Math.ceil((width - camera.x) / tile));
-    const maxY = Math.min(world.height, Math.ceil((height - camera.y) / tile));
+  function setQuality(next) {
+    quality = { ...DEFAULT_QUALITY, ...next };
+    terrainCache = null; // 紋理設定變動時重建地形快取
+    invalidate();
+  }
 
-    for (let y = minY; y < maxY; y++) {
-      for (let x = minX; x < maxX; x++) {
-        const cell = world.cells[y][x];
-        const sx = camera.x + x * tile;
-        const sy = camera.y + y * tile;
-        ctx.fillStyle = cell.terrain === "water" ? COLORS.water : cell.terrain === "rough" ? COLORS.rough : COLORS.plain;
-        ctx.fillRect(sx, sy, tile, tile);
-        if (cell.terrain === "plain") {
-          ctx.fillStyle = "rgba(205, 192, 164, 0.035)";
-          ctx.fillRect(sx + tile * 0.12, sy + tile * 0.12, tile * 0.76, tile * 0.76);
-        } else if (cell.terrain === "rough") {
-          ctx.strokeStyle = "rgba(8, 12, 14, 0.22)";
-          ctx.lineWidth = Math.max(1, tile * 0.035);
-          ctx.beginPath(); ctx.moveTo(sx + tile * 0.18, sy + tile * 0.72); ctx.lineTo(sx + tile * 0.76, sy + tile * 0.24); ctx.stroke();
+  /** 依 CSS 尺寸與像素比重設畫布；尺寸沒變就不動，避免清空畫布。 */
+  function resize(ratio) {
+    const rect = canvas.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const pixelWidth = Math.max(1, Math.floor(width * ratio));
+    const pixelHeight = Math.max(1, Math.floor(height * ratio));
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight || ratio !== pixelRatio) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
+    }
+    pixelRatio = ratio;
+    if (camera.initialized && (width !== cssWidth || height !== cssHeight)) {
+      // 版面改變（旋轉螢幕、開關抽屜）時維持畫面中心對應的地圖位置。
+      const centerX = (cssWidth / 2 - camera.x) / camera.zoom;
+      const centerY = (cssHeight / 2 - camera.y) / camera.zoom;
+      camera.x = width / 2 - centerX * camera.zoom;
+      camera.y = height / 2 - centerY * camera.zoom;
+    }
+    cssWidth = width;
+    cssHeight = height;
+    clampCamera(currentMap);
+    invalidate();
+  }
+
+  let currentMap = { width: 48, height: 32 };
+
+  const tileSize = () => TILE_SIZE * camera.zoom;
+
+  function fitToView(world) {
+    const fit = Math.min(cssWidth / (world.width * TILE_SIZE), cssHeight / (world.height * TILE_SIZE));
+    camera.zoom = Math.max(MIN_ZOOM, Math.min(1.25, fit * 0.96));
+    centerOn(world.width / 2, world.height / 2);
+    camera.initialized = true;
+  }
+
+  function focusOn(cellX, cellY, zoom) {
+    camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
+    camera.initialized = true;
+    centerOn(cellX, cellY);
+  }
+
+  function centerOn(cellX, cellY) {
+    camera.x = cssWidth / 2 - cellX * tileSize();
+    camera.y = cssHeight / 2 - cellY * tileSize();
+    clampCamera(currentMap);
+    invalidate();
+  }
+
+  function clampCamera(map) {
+    const tile = tileSize();
+    const mapW = map.width * tile;
+    const mapH = map.height * tile;
+    camera.x = Math.min(cssWidth - Math.min(EDGE_MARGIN, mapW), Math.max(Math.min(EDGE_MARGIN, mapW) - mapW, camera.x));
+    camera.y = Math.min(cssHeight - Math.min(EDGE_MARGIN, mapH), Math.max(Math.min(EDGE_MARGIN, mapH) - mapH, camera.y));
+  }
+
+  /** 整張地形只畫一次到離屏畫布，之後每幀只做一次 drawImage。 */
+  function ensureTerrain(world) {
+    const scale = quality.terrainTexture ? 2 : 1;
+    const key = `${world.width}x${world.height}@${scale}`;
+    if (terrainCache && terrainKey === key) return;
+    const size = TILE_SIZE * scale;
+    const layer = document.createElement("canvas");
+    layer.width = world.width * size;
+    layer.height = world.height * size;
+    const lctx = layer.getContext("2d");
+    for (let y = 0; y < world.height; y++) {
+      for (let x = 0; x < world.width; x++) {
+        const terrain = world.cells[y][x].terrain;
+        const px = x * size;
+        const py = y * size;
+        lctx.fillStyle = terrain === "water" ? COLORS.water : terrain === "rough" ? COLORS.rough : COLORS.plain;
+        lctx.fillRect(px, py, size, size);
+        if (!quality.terrainTexture) continue;
+        if (terrain === "plain") {
+          lctx.fillStyle = "rgba(205, 192, 164, 0.035)";
+          lctx.fillRect(px + size * 0.12, py + size * 0.12, size * 0.76, size * 0.76);
+        } else if (terrain === "rough") {
+          lctx.strokeStyle = "rgba(8, 12, 14, 0.28)";
+          lctx.lineWidth = Math.max(1, size * 0.035);
+          lctx.beginPath();
+          for (let i = 0; i < 3; i++) {
+            lctx.moveTo(px + size * (0.15 + i * 0.25), py + size * 0.78);
+            lctx.lineTo(px + size * (0.45 + i * 0.25), py + size * 0.22);
+          }
+          lctx.stroke();
+        } else {
+          lctx.strokeStyle = "rgba(150, 200, 210, 0.16)";
+          lctx.lineWidth = Math.max(1, size * 0.03);
+          lctx.beginPath();
+          lctx.moveTo(px + size * 0.2, py + size * 0.4); lctx.lineTo(px + size * 0.8, py + size * 0.4);
+          lctx.moveTo(px + size * 0.3, py + size * 0.64); lctx.lineTo(px + size * 0.7, py + size * 0.64);
+          lctx.stroke();
         }
-        if (cell.owner === "player") {
-          ctx.fillStyle = "rgba(88, 190, 222, 0.16)";
-          ctx.fillRect(sx, sy, tile, tile);
-        }
-        ctx.strokeStyle = COLORS.grid;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sx, sy, tile, tile);
       }
     }
-    for (const node of world.resourceNodes) drawResourceNode(node, tile);
-    for (const structure of world.structures) drawStructure(structure, tile, world.selectedBuildingId === structure.id);
-    for (const unit of world.units) drawUnit(unit, tile, world.selectedUnitIds.includes(unit.id));
+    terrainCache = layer;
+    terrainKey = key;
+  }
+
+  function draw(world) {
+    currentMap = world;
+    if (!camera.initialized) fitToView(world);
+    ensureTerrain(world);
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    ctx.fillStyle = COLORS.background;
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+
+    const tile = tileSize();
+    const minX = Math.max(0, Math.floor(-camera.x / tile));
+    const minY = Math.max(0, Math.floor(-camera.y / tile));
+    const maxX = Math.min(world.width, Math.ceil((cssWidth - camera.x) / tile));
+    const maxY = Math.min(world.height, Math.ceil((cssHeight - camera.y) / tile));
+    if (maxX <= minX || maxY <= minY) return;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(terrainCache, camera.x, camera.y, world.width * tile, world.height * tile);
+
+    ctx.fillStyle = "rgba(96, 188, 150, 0.13)";
+    for (let y = minY; y < maxY; y++) {
+      for (let x = minX; x < maxX; x++) {
+        if (world.cells[y][x].owner === "player") ctx.fillRect(camera.x + x * tile, camera.y + y * tile, tile, tile);
+      }
+    }
+
+    if (tile >= 12) drawGrid(minX, minY, maxX, maxY, tile);
+
+    const visible = (x, y) => x >= minX - 1 && x <= maxX && y >= minY - 1 && y <= maxY;
+    const geometryOf = (x, y) => ({ cx: camera.x + (x + 0.5) * tile, cy: camera.y + (y + 0.5) * tile, tile });
+    const showLabel = quality.details && camera.zoom >= 0.85;
+
+    for (const node of world.resourceNodes) {
+      if (visible(node.x, node.y)) drawResourceNode(ctx, node, RESOURCE_NODE_DEFINITIONS[node.type], geometryOf(node.x, node.y), quality, showLabel);
+    }
+    for (const structure of world.structures) {
+      if (!visible(structure.x, structure.y)) continue;
+      const definition = BUILDING_DEFINITIONS[structure.type];
+      const ownerColor = structure.owner === "player" ? (definition?.color || PALETTE.player)
+        : structure.owner === "enemy" ? PALETTE.enemy : PALETTE.neutral;
+      drawStructure(ctx, structure, geometryOf(structure.x, structure.y), ownerColor, world.selectedBuildingId === structure.id, quality);
+    }
+    const selected = new Set(world.selectedUnitIds);
+    for (const unit of world.units) {
+      if (visible(unit.x, unit.y)) drawUnit(unit, tile, selected.has(unit.id));
+    }
+    if (hoverCell && !buildPreview && tile >= 12) drawCellOutline(hoverCell.x, hoverCell.y, tile, "rgba(255, 240, 196, .35)");
+    if (buildPreview) drawBuildPreview(tile);
     if (selectionRect) {
-      ctx.fillStyle = "rgba(128,216,242,.12)";
-      ctx.strokeStyle = COLORS.player;
+      ctx.fillStyle = "rgba(238, 106, 44, .12)";
+      ctx.strokeStyle = PALETTE.signal;
       ctx.lineWidth = 1;
       ctx.fillRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
       ctx.strokeRect(selectionRect.x, selectionRect.y, selectionRect.width, selectionRect.height);
     }
   }
 
-  function centerCamera(world, width, height) {
-    const mapWidth = world.width * TILE_SIZE;
-    const mapHeight = world.height * TILE_SIZE;
-    camera.x = (width - mapWidth) / 2;
-    camera.y = (height - mapHeight) / 2;
-    camera.initialized = true;
+  // 所有格線合併成一條路徑，只描邊一次。
+  function drawGrid(minX, minY, maxX, maxY, tile) {
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    const left = camera.x + minX * tile;
+    const right = camera.x + maxX * tile;
+    const top = camera.y + minY * tile;
+    const bottom = camera.y + maxY * tile;
+    for (let x = minX; x <= maxX; x++) { const px = Math.round(camera.x + x * tile) + 0.5; ctx.moveTo(px, top); ctx.lineTo(px, bottom); }
+    for (let y = minY; y <= maxY; y++) { const py = Math.round(camera.y + y * tile) + 0.5; ctx.moveTo(left, py); ctx.lineTo(right, py); }
+    ctx.stroke();
   }
 
-  function drawResourceNode(node, tile) {
-    const definition = RESOURCE_NODE_DEFINITIONS[node.type];
-    const cx = camera.x + (node.x + 0.5) * tile;
-    const cy = camera.y + (node.y + 0.5) * tile;
-    const radius = Math.max(5, tile * 0.34);
-    ctx.globalAlpha = Math.max(0.35, node.amount / node.maxAmount);
-    ctx.fillStyle = "#171d20";
-    ctx.fillRect(cx - radius * 1.2, cy - radius * 0.8, radius * 2.4, radius * 1.6);
-    ctx.strokeStyle = definition.color;
-    ctx.lineWidth = Math.max(2, tile * 0.08);
-    ctx.strokeRect(cx - radius * 1.2, cy - radius * 0.8, radius * 2.4, radius * 1.6);
-    ctx.fillStyle = definition.color;
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(cx - radius * 0.72 + i * radius * 0.62, cy + radius * 0.35);
-      ctx.lineTo(cx - radius * 0.45 + i * radius * 0.62, cy - radius * 0.35);
-      ctx.lineTo(cx - radius * 0.12 + i * radius * 0.62, cy + radius * 0.35);
-      ctx.closePath(); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    if (camera.zoom >= 0.85) {
-      ctx.fillStyle = "#171d20";
-      ctx.font = `900 ${Math.max(8, tile * 0.32)}px sans-serif`;
-      ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(node.resource === "commonMetal" ? "M" : "R", cx, cy);
-    }
+  function drawCellOutline(x, y, tile, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(camera.x + x * tile + 1, camera.y + y * tile + 1, tile - 2, tile - 2);
   }
 
-  function drawStructure(structure, tile, selected) {
-    const cx = camera.x + (structure.x + 0.5) * tile;
-    const cy = camera.y + (structure.y + 0.5) * tile;
-    const definition = BUILDING_DEFINITIONS[structure.type];
-    const ownerColor = structure.owner === "player"
-      ? (definition?.color || COLORS.player)
-      : structure.owner === "enemy" ? COLORS.enemy : COLORS.neutral;
-    const s = tile * (structure.type === "hq" ? 0.88 : 0.78);
-    const left = cx - s / 2;
-    const top = cy - s / 2;
-
-    // Reinforced concrete foundation and dark cast shadow.
-    ctx.fillStyle = "rgba(0,0,0,.42)";
-    ctx.fillRect(left + tile * 0.08, top + tile * 0.12, s, s);
-    ctx.fillStyle = "#171d20";
-    ctx.fillRect(left - tile * 0.04, top - tile * 0.04, s + tile * 0.08, s + tile * 0.08);
-    ctx.strokeStyle = selected ? "#fff0c4" : "#697276";
-    ctx.lineWidth = selected ? 2.5 : 1;
-    ctx.strokeRect(left - tile * 0.04, top - tile * 0.04, s + tile * 0.08, s + tile * 0.08);
-
-    if (structure.type === "outpost") {
-      ctx.fillStyle = ownerColor;
+  function drawBuildPreview(tile) {
+    const { x, y, valid, type } = buildPreview;
+    ctx.fillStyle = valid ? "rgba(143, 227, 160, .28)" : "rgba(214, 90, 70, .32)";
+    ctx.fillRect(camera.x + x * tile, camera.y + y * tile, tile, tile);
+    drawCellOutline(x, y, tile, valid ? "#8fe3a0" : "#e0624a");
+    if (type === "metalMine") {
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = "rgba(226, 181, 58, .55)";
+      ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(cx, top - tile * 0.08);
-      ctx.lineTo(left + s + tile * 0.08, cy);
-      ctx.lineTo(cx, top + s + tile * 0.08);
-      ctx.lineTo(left - tile * 0.08, cy);
+      ctx.moveTo(camera.x + (x + 0.5) * tile, camera.y + (y - 2.5) * tile);
+      ctx.lineTo(camera.x + (x + 3.5) * tile, camera.y + (y + 0.5) * tile);
+      ctx.lineTo(camera.x + (x + 0.5) * tile, camera.y + (y + 3.5) * tile);
+      ctx.lineTo(camera.x + (x - 2.5) * tile, camera.y + (y + 0.5) * tile);
       ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "#161c1f";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.fillStyle = "#171d20";
-      ctx.fillRect(cx - tile * 0.08, cy - tile * 0.08, tile * 0.16, tile * 0.16);
-    } else {
-      ctx.fillStyle = ownerColor;
-      ctx.fillRect(left, top, s, s);
-      ctx.strokeStyle = "#121719";
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(left, top, s, s);
-
-      // Structural seams and equipment vary by facility.
-      ctx.strokeStyle = "rgba(15,20,22,.62)";
-      ctx.lineWidth = Math.max(1, tile * 0.035);
-      ctx.beginPath();
-      ctx.moveTo(left + s * 0.12, top + s * 0.72);
-      ctx.lineTo(left + s * 0.88, top + s * 0.72);
-      ctx.moveTo(left + s * 0.18, top + s * 0.12);
-      ctx.lineTo(left + s * 0.18, top + s * 0.66);
-      ctx.stroke();
-
-      if (structure.type === "hq") {
-        ctx.fillStyle = "#303a3e";
-        ctx.fillRect(cx - s * 0.27, cy - s * 0.24, s * 0.54, s * 0.52);
-        ctx.fillStyle = "#c9a25c";
-        ctx.fillRect(cx - s * 0.31, cy - s * 0.29, s * 0.62, s * 0.1);
-        ctx.fillStyle = "#e9e2d0";
-        ctx.fillRect(cx - s * 0.035, cy - s * 0.42, s * 0.07, s * 0.2);
-        ctx.fillRect(cx + s * 0.18, cy - s * 0.12, s * 0.06, s * 0.18);
-      } else if (structure.type === "factory") {
-        ctx.fillStyle = "#252d30";
-        ctx.fillRect(left + s * 0.12, top + s * 0.28, s * 0.76, s * 0.52);
-        ctx.fillStyle = "#b5b5a9";
-        ctx.fillRect(left + s * 0.2, top + s * 0.17, s * 0.13, s * 0.12);
-        ctx.fillRect(left + s * 0.42, top + s * 0.17, s * 0.13, s * 0.12);
-        ctx.fillRect(left + s * 0.64, top + s * 0.17, s * 0.13, s * 0.12);
-        ctx.fillStyle = "#d8a64f";
-        ctx.fillRect(left + s * 0.72, top - s * 0.12, s * 0.13, s * 0.4);
-        ctx.fillStyle = "#171d20";
-        ctx.fillRect(left + s * 0.75, top - s * 0.16, s * 0.2, s * 0.08);
-      } else if (structure.type === "warehouse") {
-        ctx.fillStyle = "#343e42";
-        ctx.fillRect(left + s * 0.1, top + s * 0.2, s * 0.8, s * 0.58);
-        ctx.strokeStyle = "#aeb6b4";
-        ctx.beginPath();
-        for (let i = 1; i <= 3; i++) {
-          ctx.moveTo(left + s * (0.1 + i * 0.2), top + s * 0.22);
-          ctx.lineTo(left + s * (0.1 + i * 0.2), top + s * 0.75);
-        }
-        ctx.stroke();
-      } else if (structure.type === "metalMine") {
-        ctx.strokeStyle = "#22292c";
-        ctx.lineWidth = Math.max(2, tile * 0.075);
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.22, cy + s * 0.34);
-        ctx.lineTo(cx - s * 0.1, cy - s * 0.25);
-        ctx.lineTo(cx + s * 0.1, cy - s * 0.25);
-        ctx.lineTo(cx + s * 0.22, cy + s * 0.34);
-        ctx.moveTo(cx - s * 0.3, cy - s * 0.25);
-        ctx.lineTo(cx + s * 0.3, cy - s * 0.25);
-        ctx.stroke();
-        ctx.fillStyle = "#d6a24f";
-        ctx.fillRect(cx - s * 0.06, cy - s * 0.34, s * 0.12, s * 0.13);
-      } else if (structure.type === "oilWell") {
-        ctx.strokeStyle = "#252c2f";
-        ctx.lineWidth = Math.max(2, tile * 0.075);
-        ctx.beginPath();
-        ctx.moveTo(cx, top + s * 0.12);
-        ctx.lineTo(cx - s * 0.2, top + s * 0.78);
-        ctx.moveTo(cx, top + s * 0.12);
-        ctx.lineTo(cx + s * 0.2, top + s * 0.78);
-        ctx.moveTo(cx - s * 0.28, top + s * 0.25);
-        ctx.lineTo(cx + s * 0.28, top + s * 0.25);
-        ctx.stroke();
-        ctx.fillStyle = "#171d20";
-        ctx.fillRect(cx - s * 0.32, top + s * 0.18, s * 0.64, s * 0.09);
-      } else if (structure.type === "lumberCamp") {
-        ctx.fillStyle = "#282f2e";
-        ctx.fillRect(left + s * 0.12, top + s * 0.18, s * 0.76, s * 0.48);
-        ctx.fillStyle = "#c69a62";
-        for (let i = 0; i < 3; i++) {
-          ctx.fillRect(left + s * 0.2, top + s * (0.24 + i * 0.13), s * 0.6, s * 0.055);
-        }
-      } else if (structure.type === "quarry") {
-        ctx.fillStyle = "#30383b";
-        ctx.fillRect(cx - s * 0.22, cy - s * 0.22, s * 0.44, s * 0.48);
-        ctx.fillStyle = "#d0d0c3";
-        ctx.fillRect(cx - s * 0.3, cy - s * 0.3, s * 0.6, s * 0.12);
-        ctx.strokeStyle = "#20272a";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cx - s * 0.14, cy - s * 0.1);
-        ctx.lineTo(cx + s * 0.14, cy + s * 0.2);
-        ctx.moveTo(cx + s * 0.14, cy - s * 0.1);
-        ctx.lineTo(cx - s * 0.14, cy + s * 0.2);
-        ctx.stroke();
-      }
-    }
-
-    if (selected) {
-      ctx.beginPath();
-      ctx.arc(cx, cy, tile * 0.52, 0, Math.PI * 2);
-      ctx.strokeStyle = "#f3d28e";
-      ctx.lineWidth = 2;
-      ctx.setLineDash([tile * 0.12, tile * 0.08]);
       ctx.stroke();
       ctx.setLineDash([]);
     }
@@ -244,29 +234,27 @@ export function createRenderer(canvas) {
   function drawUnit(unit, tile, selected) {
     const cx = camera.x + (unit.x + 0.5) * tile;
     const cy = camera.y + (unit.y + 0.5) * tile;
-    if (unit.path.length) {
+    if (selected && quality.paths && unit.path.length) {
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       for (const point of unit.path) ctx.lineTo(camera.x + (point.x + 0.5) * tile, camera.y + (point.y + 0.5) * tile);
-      ctx.strokeStyle = "rgba(131,217,243,.38)";
+      ctx.strokeStyle = "rgba(238, 160, 100, .5)";
       ctx.lineWidth = Math.max(1, tile * 0.07);
       ctx.stroke();
     }
     ctx.beginPath();
     ctx.arc(cx, cy, tile * (selected ? 0.34 : 0.27), 0, Math.PI * 2);
-    ctx.fillStyle = COLORS.player;
+    ctx.fillStyle = PALETTE.player;
     ctx.fill();
     ctx.lineWidth = selected ? 3 : 1.5;
-    ctx.strokeStyle = selected ? "#ffffff" : "#173b4b";
+    ctx.strokeStyle = selected ? "#ffffff" : "#3a2a12";
     ctx.stroke();
   }
 
   function screenToCell(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    return {
-      x: Math.floor((clientX - rect.left - camera.x) / (TILE_SIZE * camera.zoom)),
-      y: Math.floor((clientY - rect.top - camera.y) / (TILE_SIZE * camera.zoom))
-    };
+    const tile = tileSize();
+    return { x: Math.floor((clientX - rect.left - camera.x) / tile), y: Math.floor((clientY - rect.top - camera.y) / tile) };
   }
 
   function screenRectToCellBounds(rect) {
@@ -278,6 +266,8 @@ export function createRenderer(canvas) {
   function panBy(dx, dy) {
     camera.x += dx;
     camera.y += dy;
+    clampCamera(currentMap);
+    invalidate();
   }
 
   function zoomAt(clientX, clientY, factor) {
@@ -286,14 +276,30 @@ export function createRenderer(canvas) {
     const sy = clientY - rect.top;
     const beforeX = (sx - camera.x) / camera.zoom;
     const beforeY = (sy - camera.y) / camera.zoom;
-    camera.zoom = Math.max(0.55, Math.min(2.1, camera.zoom * factor));
+    camera.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, camera.zoom * factor));
     camera.x = sx - beforeX * camera.zoom;
     camera.y = sy - beforeY * camera.zoom;
+    clampCamera(currentMap);
+    invalidate();
   }
 
-  function setSelectionRect(rect) { selectionRect = rect; }
-  function clearSelectionRect() { selectionRect = null; }
-  function getZoom() { return camera.zoom; }
+  function zoomCenter(factor) {
+    const rect = canvas.getBoundingClientRect();
+    zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+  }
 
-  return { draw, setPixelRatio, screenToCell, screenRectToCellBounds, panBy, zoomAt, setSelectionRect, clearSelectionRect, getZoom };
+  return {
+    draw, resize, setQuality, invalidate, consumeDirty, screenToCell, screenRectToCellBounds,
+    panBy, zoomAt, zoomCenter, centerOn, focusOn,
+    fitToView: world => { fitToView(world); invalidate(); },
+    setSelectionRect(rect) { selectionRect = rect; invalidate(); },
+    clearSelectionRect() { if (selectionRect) { selectionRect = null; invalidate(); } },
+    setHoverCell(cell) {
+      if (hoverCell?.x === cell?.x && hoverCell?.y === cell?.y) return;
+      hoverCell = cell; invalidate();
+    },
+    setBuildPreview(preview) { buildPreview = preview; invalidate(); },
+    getZoom: () => camera.zoom,
+    getPixelRatio: () => pixelRatio
+  };
 }
